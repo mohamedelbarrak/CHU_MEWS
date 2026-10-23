@@ -1,0 +1,182 @@
+import sys
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QApplication,
+    QWidget,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QStackedWidget
+)
+
+
+# ==========================
+# PAGE D'ACCUEIL
+# ==========================
+
+class WelcomePage(QWidget):
+
+    def __init__(self, stack):
+        super().__init__()
+
+        self.stack = stack
+
+        self.setStyleSheet("""
+            QWidget{
+                background-color:white;
+            }
+
+            QLabel#title{
+                color:#0B5ED7;
+                font-size:34px;
+                font-weight:bold;
+            }
+
+            QLabel#subtitle{
+                color:#444;
+                font-size:20px;
+            }
+
+            QLabel#footer{
+                color:#666;
+                font-size:16px;
+            }
+
+            QPushButton{
+                background-color:#0B5ED7;
+                color:white;
+                border-radius:90px;
+                font-size:28px;
+                font-weight:bold;
+            }
+
+            QPushButton:hover{
+                background-color:#0A58CA;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setSpacing(20)
+
+        title = QLabel("CHU DE TANGER")
+        title.setObjectName("title")
+        title.setAlignment(Qt.AlignCenter)
+
+        subtitle = QLabel("Calcul Automatique du Score MEWS")
+        subtitle.setObjectName("subtitle")
+        subtitle.setAlignment(Qt.AlignCenter)
+
+        developed = QLabel(
+            "Développé par :\n"
+            "EL BARRAK Ibtihal\n\n"
+            "Encadré par :\n"
+            "Pr. Mohamed EL BARRAK\n"
+            "Pr. Imane HAMIDI\n"
+            "Pr. Hamza"
+        )
+
+        developed.setObjectName("footer")
+        developed.setAlignment(Qt.AlignCenter)
+
+        startButton = QPushButton("DÉMARRER")
+        startButton.setFixedSize(180,180)
+
+        font = QFont()
+        font.setPointSize(18)
+        font.setBold(True)
+
+        startButton.setFont(font)
+
+        startButton.clicked.connect(self.start)
+
+        layout.addStretch()
+
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+        layout.addSpacing(50)
+        layout.addWidget(startButton, alignment=Qt.AlignCenter)
+        layout.addSpacing(50)
+        layout.addWidget(developed)
+
+        layout.addStretch()
+
+        self.setLayout(layout)
+
+    def start(self):
+        self.stack.setCurrentIndex(1)
+
+
+# ==========================
+# PAGE SUIVANTE
+# ==========================
+
+class PPMPage(QWidget):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.setStyleSheet("""
+            background:white;
+            font-size:26px;
+        """)
+
+        layout = QVBoxLayout()
+
+        titre = QLabel("Identification du patient")
+        titre.setAlignment(Qt.AlignCenter)
+
+        titre.setStyleSheet("""
+            color:#0B5ED7;
+            font-size:30px;
+            font-weight:bold;
+        """)
+
+        info = QLabel("Veuillez saisir le PPM du patient")
+        info.setAlignment(Qt.AlignCenter)
+
+        layout.addStretch()
+        layout.addWidget(titre)
+        layout.addSpacing(20)
+        layout.addWidget(info)
+        layout.addStretch()
+
+        self.setLayout(layout)
+
+
+# ==========================
+# FENETRE PRINCIPALE
+# ==========================
+
+class MainWindow(QStackedWidget):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.setWindowTitle("MEWS")
+
+        self.welcome = WelcomePage(self)
+        self.ppm = PPMPage()
+
+        self.addWidget(self.welcome)
+        self.addWidget(self.ppm)
+
+        self.showFullScreen()
+
+
+# ==========================
+# MAIN
+# ==========================
+
+if __name__ == "__main__":
+
+    app = QApplication(sys.argv)
+
+    window = MainWindow()
+
+    window.show()
+
+    sys.exit(app.exec())

@@ -1,0 +1,1618 @@
+import sys
+
+from PySide6.QtCore import (
+    Qt,
+    QRectF,
+    QTimer
+)
+
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QPainter,
+    QPen
+)
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QWidget,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
+    QStackedWidget,
+    QMessageBox
+)
+
+###########################################################
+#                    PATIENT
+###########################################################
+
+class Patient:
+
+    def __init__(self):
+
+        self.reset()
+
+    def reset(self):
+
+        # Identification
+
+        self.ppm = ""
+
+        # Constantes vitales
+
+        self.temperature = None
+
+        self.frequence_cardiaque = None
+
+        self.frequence_respiratoire = None
+
+        self.pression_systolique = None
+
+        self.pression_diastolique = None
+
+        self.spo2 = None
+
+        # Evaluation
+
+        self.conscience = None
+
+        # Résultat
+
+        self.score_mews = None
+
+
+###########################################################
+#              CERCLE DU CHRONOMETRE
+###########################################################
+
+class CircularTimer(QWidget):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.value = 60
+
+        self.maximum = 60
+
+        self.setMinimumSize(320,320)
+
+    def setValue(self,value):
+
+        self.value = value
+
+        self.update()
+
+    def paintEvent(self,event):
+
+        painter = QPainter(self)
+
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        size = min(self.width(),self.height())-20
+
+        rect = QRectF(
+
+            (self.width()-size)/2,
+
+            (self.height()-size)/2,
+
+            size,
+
+            size
+
+        )
+
+        ###################################
+
+        pen = QPen(QColor(230,230,230),18)
+
+        painter.setPen(pen)
+
+        painter.drawEllipse(rect)
+
+        ###################################
+
+        angle = 360*self.value/self.maximum
+
+        pen = QPen(QColor("#1976D2"),18)
+
+        painter.setPen(pen)
+
+        painter.drawArc(
+
+            rect,
+
+            90*16,
+
+            -angle*16
+
+        )
+
+        ###################################
+
+        painter.setPen(Qt.black)
+
+        painter.setFont(
+
+            QFont(
+
+                "Arial",
+
+                42,
+
+                QFont.Bold
+
+            )
+
+        )
+
+        painter.drawText(
+
+            rect,
+
+            Qt.AlignCenter,
+
+            str(self.value)
+
+        )
+
+
+###########################################################
+#                PAGE ACCUEIL
+###########################################################
+
+class WelcomePage(QWidget):
+
+    def __init__(self,window):
+
+        super().__init__()
+
+        self.window = window
+
+        self.setStyleSheet("""
+
+        QWidget{
+
+            background:white;
+
+        }
+
+        QLabel{
+
+            color:#2c3e50;
+
+        }
+
+        QPushButton{
+
+            background:#1976D2;
+
+            color:white;
+
+            border-radius:90px;
+
+            border:none;
+
+            font-size:22px;
+
+            font-weight:bold;
+
+        }
+
+        QPushButton:hover{
+
+            background:#1565C0;
+
+        }
+
+        """)
+
+        layout = QVBoxLayout()
+
+        layout.setAlignment(Qt.AlignCenter)
+
+        layout.setSpacing(25)
+
+        ###################################
+
+        title = QLabel(
+
+            "CHU DE TANGER"
+
+        )
+
+        title.setAlignment(
+
+            Qt.AlignCenter
+
+        )
+
+        title.setFont(
+
+            QFont(
+
+                "Arial",
+
+                32,
+
+                QFont.Bold
+
+            )
+
+        )
+
+        ###################################
+
+        subtitle = QLabel(
+
+            "Calcul Automatique du Score MEWS"
+
+        )
+
+        subtitle.setAlignment(
+
+            Qt.AlignCenter
+
+        )
+
+        subtitle.setFont(
+
+            QFont(
+
+                "Arial",
+
+                18
+
+            )
+
+        )
+
+        ###################################
+
+        infos = QLabel(
+
+            "Développé par\n"
+
+            "EL BARRAK Ibtihal\n\n"
+
+            "Encadré par\n"
+
+            "Pr. Mohamed EL BARRAK\n"
+
+            "Pr. Imane HAMIDI\n"
+
+            "Pr. Hamza"
+
+        )
+
+        infos.setAlignment(
+
+            Qt.AlignCenter
+
+        )
+
+        infos.setFont(
+
+            QFont(
+
+                "Arial",
+
+                12
+
+            )
+
+        )
+
+        ###################################
+
+        self.startButton = QPushButton(
+
+            "DÉMARRER"
+
+        )
+
+        self.startButton.setFixedSize(
+
+            180,
+
+            180
+
+        )
+
+        self.startButton.clicked.connect(
+
+            self.start_application
+
+        )
+
+        ###################################
+
+        layout.addStretch()
+
+        layout.addWidget(title)
+
+        layout.addWidget(subtitle)
+
+        layout.addSpacing(50)
+
+        layout.addWidget(
+
+            self.startButton,
+
+            alignment=Qt.AlignCenter
+
+        )
+
+        layout.addSpacing(50)
+
+        layout.addWidget(infos)
+
+        layout.addStretch()
+
+        self.setLayout(layout)
+
+    def start_application(self):
+
+        self.window.patient.reset()
+
+        self.window.show_ppm()
+
+    ###########################################################
+#                PAGE PPM
+###########################################################
+
+class PPMPage(QWidget):
+
+    def __init__(self, window):
+
+        super().__init__()
+
+        self.window = window
+
+        self.ppm = ""
+
+        self.setStyleSheet("""
+
+        QWidget{
+
+            background:white;
+
+        }
+
+        QLabel{
+
+            color:#2c3e50;
+
+        }
+
+        QPushButton{
+
+            background:#1976D2;
+
+            color:white;
+
+            border:none;
+
+            border-radius:12px;
+
+            font-size:22px;
+
+            min-height:75px;
+
+        }
+
+        QPushButton:hover{
+
+            background:#1565C0;
+
+        }
+
+        """)
+
+        ###################################################
+
+        mainLayout = QVBoxLayout()
+
+        ###################################################
+
+        title = QLabel("Identification du patient")
+
+        title.setAlignment(Qt.AlignCenter)
+
+        title.setFont(
+            QFont(
+                "Arial",
+                28,
+                QFont.Bold
+            )
+        )
+
+        ###################################################
+
+        info = QLabel("Veuillez saisir le PPM du patient")
+
+        info.setAlignment(Qt.AlignCenter)
+
+        info.setFont(
+            QFont(
+                "Arial",
+                16
+            )
+        )
+
+        ###################################################
+
+        self.display = QLabel("")
+
+        self.display.setAlignment(Qt.AlignCenter)
+
+        self.display.setMinimumHeight(80)
+
+        self.display.setStyleSheet("""
+
+        QLabel{
+
+            background:#F4F6F7;
+
+            border:3px solid #1976D2;
+
+            border-radius:10px;
+
+            font-size:30px;
+
+            font-weight:bold;
+
+            color:black;
+
+        }
+
+        """)
+
+        ###################################################
+
+        keypad = QGridLayout()
+
+        buttons = [
+
+            ("1",0,0),
+            ("2",0,1),
+            ("3",0,2),
+
+            ("4",1,0),
+            ("5",1,1),
+            ("6",1,2),
+
+            ("7",2,0),
+            ("8",2,1),
+            ("9",2,2),
+
+            ("0",3,1)
+
+        ]
+
+        for text,row,col in buttons:
+
+            button = QPushButton(text)
+
+            button.clicked.connect(
+
+                lambda checked=False,
+                value=text:
+                self.add_digit(value)
+
+            )
+
+            keypad.addWidget(
+
+                button,
+
+                row,
+
+                col
+
+            )
+
+        ###################################################
+
+        bottom = QHBoxLayout()
+
+        self.clearButton = QPushButton("EFFACER")
+
+        self.clearButton.clicked.connect(
+
+            self.clear_ppm
+
+        )
+
+        self.validateButton = QPushButton("VALIDER")
+
+        self.validateButton.clicked.connect(
+
+            self.validate_ppm
+
+        )
+
+        bottom.addWidget(self.clearButton)
+
+        bottom.addWidget(self.validateButton)
+
+        ###################################################
+
+        mainLayout.addStretch()
+
+        mainLayout.addWidget(title)
+
+        mainLayout.addWidget(info)
+
+        mainLayout.addSpacing(20)
+
+        mainLayout.addWidget(self.display)
+
+        mainLayout.addSpacing(30)
+
+        mainLayout.addLayout(keypad)
+
+        mainLayout.addSpacing(25)
+
+        mainLayout.addLayout(bottom)
+
+        mainLayout.addStretch()
+
+        self.setLayout(mainLayout)
+
+    ###################################################
+    # Ajouter un chiffre
+    ###################################################
+
+    def add_digit(self, digit):
+
+        if len(self.ppm) >= 15:
+            return
+
+        self.ppm += digit
+
+        self.display.setText(self.ppm)
+
+    ###################################################
+    # Effacer
+    ###################################################
+
+    def clear_ppm(self):
+
+        self.ppm = ""
+
+        self.display.setText("")
+
+    ###################################################
+    # Réinitialiser la page
+    ###################################################
+
+    def reset_page(self):
+
+        self.ppm = ""
+
+        self.display.setText("")
+
+    ###################################################
+    # Validation
+    ###################################################
+
+    def validate_ppm(self):
+
+        if self.ppm == "":
+
+            QMessageBox.warning(
+
+                self,
+
+                "PPM",
+
+                "Veuillez saisir le PPM du patient."
+
+            )
+
+            return
+
+        ###############################################
+
+        self.window.patient.ppm = self.ppm
+
+        print("Patient :", self.window.patient.ppm)
+
+        ###############################################
+
+        self.window.show_respiration()
+
+        ###########################################################
+#              PAGE RESPIRATION
+###########################################################
+
+class RespirationPage(QWidget):
+
+    def __init__(self, window):
+
+        super().__init__()
+
+        self.window = window
+
+        self.remaining_time = 60
+
+        self.nb_respirations = 0
+
+        self.running = False
+
+        ###################################################
+
+        self.timer = QTimer()
+
+        self.timer.timeout.connect(self.update_timer)
+
+        ###################################################
+
+        self.setStyleSheet("""
+
+        QWidget{
+
+            background:white;
+
+        }
+
+        QLabel{
+
+            color:#2c3e50;
+
+        }
+
+        QPushButton{
+
+            background:#1976D2;
+
+            color:white;
+
+            border:none;
+
+            border-radius:15px;
+
+            font-size:22px;
+
+            min-height:75px;
+
+        }
+
+        QPushButton:hover{
+
+            background:#1565C0;
+
+        }
+
+        QPushButton:disabled{
+
+            background:#BDBDBD;
+
+        }
+
+        """)
+
+        ###################################################
+
+        layout = QVBoxLayout()
+
+        layout.setSpacing(20)
+
+        ###################################################
+
+        title = QLabel("Mesure de la fréquence respiratoire")
+
+        title.setAlignment(Qt.AlignCenter)
+
+        title.setFont(
+
+            QFont(
+
+                "Arial",
+
+                28,
+
+                QFont.Bold
+
+            )
+
+        )
+
+        ###################################################
+
+        instruction = QLabel(
+
+            "Lorsque le patient inspire,\n"
+
+            "appuyez sur le bouton RESPIRATION.\n\n"
+
+            "Le comptage dure 60 secondes."
+
+        )
+
+        instruction.setAlignment(
+
+            Qt.AlignCenter
+
+        )
+
+        instruction.setFont(
+
+            QFont(
+
+                "Arial",
+
+                16
+
+            )
+
+        )
+
+        ###################################################
+
+        self.circular = CircularTimer()
+
+        ###################################################
+
+        self.counterLabel = QLabel(
+
+            "Respirations : 0"
+
+        )
+
+        self.counterLabel.setAlignment(
+
+            Qt.AlignCenter
+
+        )
+
+        self.counterLabel.setFont(
+
+            QFont(
+
+                "Arial",
+
+                24,
+
+                QFont.Bold
+
+            )
+
+        )
+
+        ###################################################
+
+        self.startButton = QPushButton(
+
+            "COMMENCER"
+
+        )
+
+        self.startButton.clicked.connect(
+
+            self.start_measure
+
+        )
+
+        ###################################################
+
+        self.respButton = QPushButton(
+
+            "RESPIRATION"
+
+        )
+
+        self.respButton.setMinimumHeight(
+
+            90
+
+        )
+
+        self.respButton.setEnabled(False)
+
+        self.respButton.clicked.connect(
+
+            self.add_respiration
+
+        )
+
+        ###################################################
+
+        self.nextButton = QPushButton(
+
+            "SUIVANT"
+
+        )
+
+        self.nextButton.setEnabled(False)
+
+        self.nextButton.clicked.connect(
+
+            self.next_page
+
+        )
+
+        ###################################################
+
+        layout.addStretch()
+
+        layout.addWidget(title)
+
+        layout.addWidget(instruction)
+
+        layout.addSpacing(20)
+
+        layout.addWidget(
+
+            self.circular,
+
+            alignment=Qt.AlignCenter
+
+        )
+
+        layout.addSpacing(20)
+
+        layout.addWidget(self.counterLabel)
+
+        layout.addSpacing(25)
+
+        layout.addWidget(self.startButton)
+
+        layout.addWidget(self.respButton)
+
+        layout.addWidget(self.nextButton)
+
+        layout.addStretch()
+
+        self.setLayout(layout)
+
+            ###########################################################
+    # Réinitialiser la page
+    ###########################################################
+
+    def reset_page(self):
+
+        self.timer.stop()
+
+        self.running = False
+
+        self.remaining_time = 60
+
+        self.nb_respirations = 0
+
+        self.circular.setValue(60)
+
+        self.counterLabel.setText("Respirations : 0")
+
+        self.startButton.setEnabled(True)
+
+        self.respButton.setEnabled(False)
+
+        self.nextButton.setEnabled(False)
+
+
+    ###########################################################
+    # Commencer la mesure
+    ###########################################################
+
+    def start_measure(self):
+
+        self.reset_page()
+
+        self.running = True
+
+        self.startButton.setEnabled(False)
+
+        self.respButton.setEnabled(True)
+
+        self.timer.start(1000)
+
+
+    ###########################################################
+    # Mise à jour du chronomètre
+    ###########################################################
+
+    def update_timer(self):
+
+        self.remaining_time -= 1
+
+        self.circular.setValue(self.remaining_time)
+
+        if self.remaining_time <= 0:
+
+            self.timer.stop()
+
+            self.running = False
+
+            self.respButton.setEnabled(False)
+
+            self.nextButton.setEnabled(True)
+
+            self.startButton.setEnabled(True)
+
+            self.window.patient.frequence_respiratoire = self.nb_respirations
+
+            print("Respirations enregistrées :")
+
+            print(self.window.patient.frequence_respiratoire)
+
+
+    ###########################################################
+    # Ajouter une respiration
+    ###########################################################
+
+    def add_respiration(self):
+
+        if not self.running:
+            return
+
+        self.nb_respirations += 1
+
+        self.counterLabel.setText(
+
+            f"Respirations : {self.nb_respirations}"
+
+        )
+
+
+    ###########################################################
+    # Page suivante
+    ###########################################################
+
+    def next_page(self):
+
+        print("========== PATIENT ==========")
+
+        print("PPM :", self.window.patient.ppm)
+
+        print(
+
+            "Respiration :",
+
+            self.window.patient.frequence_respiratoire
+
+        )
+
+        print("=============================")
+
+        # Aller à la page Température
+        # self.window.show_temperature()
+
+        ###########################################################
+#              PAGE TEMPERATURE
+###########################################################
+
+class TemperaturePage(QWidget):
+
+    def __init__(self, window):
+
+        super().__init__()
+
+        self.window = window
+
+        self.temperature = 36.5
+
+        ###################################################
+
+        self.setStyleSheet("""
+
+        QWidget{
+
+            background:white;
+
+        }
+
+        QLabel{
+
+            color:#2c3e50;
+
+        }
+
+        QPushButton{
+
+            background:#1976D2;
+
+            color:white;
+
+            border:none;
+
+            border-radius:15px;
+
+            font-size:22px;
+
+            min-height:75px;
+
+        }
+
+        QPushButton:hover{
+
+            background:#1565C0;
+
+        }
+
+        """)
+
+        ###################################################
+
+        layout = QVBoxLayout()
+
+        layout.setSpacing(20)
+
+        ###################################################
+
+        title = QLabel("Mesure de la température")
+
+        title.setAlignment(Qt.AlignCenter)
+
+        title.setFont(
+
+            QFont(
+
+                "Arial",
+
+                28,
+
+                QFont.Bold
+
+            )
+
+        )
+
+        ###################################################
+
+        info = QLabel(
+
+            "Approchez le front du patient.\n\n"
+
+            "Cliquez sur MESURER."
+
+        )
+
+        info.setAlignment(Qt.AlignCenter)
+
+        info.setFont(QFont("Arial",16))
+
+        ###################################################
+
+        self.valueLabel = QLabel("--.- °C")
+
+        self.valueLabel.setAlignment(Qt.AlignCenter)
+
+        self.valueLabel.setFont(
+
+            QFont(
+
+                "Arial",
+
+                48,
+
+                QFont.Bold
+
+            )
+
+        )
+
+        ###################################################
+
+        self.measureButton = QPushButton("MESURER")
+
+        self.measureButton.clicked.connect(
+
+            self.measure_temperature
+
+        )
+
+        ###################################################
+
+        self.nextButton = QPushButton("SUIVANT")
+
+        self.nextButton.setEnabled(False)
+
+        self.nextButton.clicked.connect(
+
+            self.next_page
+
+        )
+
+        ###################################################
+
+        layout.addStretch()
+
+        layout.addWidget(title)
+
+        layout.addWidget(info)
+
+        layout.addSpacing(30)
+
+        layout.addWidget(self.valueLabel)
+
+        layout.addSpacing(40)
+
+        layout.addWidget(self.measureButton)
+
+        layout.addWidget(self.nextButton)
+
+        layout.addStretch()
+
+        self.setLayout(layout)
+
+    ###########################################################
+
+    def reset_page(self):
+
+        self.valueLabel.setText("--.- °C")
+
+        self.nextButton.setEnabled(False)
+
+    ###########################################################
+
+    def measure_temperature(self):
+
+        ###################################################
+        # Plus tard :
+        # self.temperature = mlx90614.readObjectTempC()
+        ###################################################
+
+        self.temperature = 36.8
+
+        self.valueLabel.setText(
+
+            f"{self.temperature:.1f} °C"
+
+        )
+
+        self.window.patient.temperature = self.temperature
+
+        self.nextButton.setEnabled(True)
+
+    ###########################################################
+
+    def next_page(self):
+
+        print("========== PATIENT ==========")
+
+        print("PPM :", self.window.patient.ppm)
+
+        print(
+
+            "Respiration :",
+
+            self.window.patient.frequence_respiratoire
+
+        )
+
+        print(
+
+            "Température :",
+
+            self.window.patient.temperature
+
+        )
+
+        print("=============================")
+
+        # self.window.show_heart_rate()
+
+        ###########################################################
+#              PAGE FREQUENCE CARDIAQUE
+###########################################################
+
+class HeartRatePage(QWidget):
+
+    def __init__(self, window):
+
+        super().__init__()
+
+        self.window = window
+
+        self.bpm = 0
+
+        self.remaining_time = 15
+
+        self.timer = QTimer()
+
+        self.timer.timeout.connect(self.update_timer)
+
+        ###################################################
+
+        self.setStyleSheet("""
+
+        QWidget{
+
+            background:white;
+
+        }
+
+        QLabel{
+
+            color:#2c3e50;
+
+        }
+
+        QPushButton{
+
+            background:#1976D2;
+
+            color:white;
+
+            border:none;
+
+            border-radius:15px;
+
+            font-size:22px;
+
+            min-height:75px;
+
+        }
+
+        QPushButton:hover{
+
+            background:#1565C0;
+
+        }
+
+        """)
+
+        ###################################################
+
+        layout = QVBoxLayout()
+
+        layout.setSpacing(20)
+
+        ###################################################
+
+        title = QLabel("Fréquence cardiaque")
+
+        title.setAlignment(Qt.AlignCenter)
+
+        title.setFont(
+
+            QFont(
+
+                "Arial",
+
+                28,
+
+                QFont.Bold
+
+            )
+
+        )
+
+        ###################################################
+
+        info = QLabel(
+
+            "Placez votre doigt sur le capteur.\n\n"
+
+            "Puis cliquez sur COMMENCER."
+
+        )
+
+        info.setAlignment(Qt.AlignCenter)
+
+        info.setFont(
+
+            QFont(
+
+                "Arial",
+
+                16
+
+            )
+
+        )
+
+        ###################################################
+
+        self.timeLabel = QLabel("15")
+
+        self.timeLabel.setAlignment(Qt.AlignCenter)
+
+        self.timeLabel.setFont(
+
+            QFont(
+
+                "Arial",
+
+                52,
+
+                QFont.Bold
+
+            )
+
+        )
+
+        ###################################################
+
+        self.heartLabel = QLabel("❤")
+
+        self.heartLabel.setAlignment(Qt.AlignCenter)
+
+        self.heartLabel.setStyleSheet("""
+
+        color:red;
+
+        font-size:90px;
+
+        """)
+
+        ###################################################
+
+        self.bpmLabel = QLabel("-- BPM")
+
+        self.bpmLabel.setAlignment(Qt.AlignCenter)
+
+        self.bpmLabel.setFont(
+
+            QFont(
+
+                "Arial",
+
+                34,
+
+                QFont.Bold
+
+            )
+
+        )
+
+        ###################################################
+
+        self.startButton = QPushButton("COMMENCER")
+
+        self.startButton.clicked.connect(
+
+            self.start_measure
+
+        )
+
+        ###################################################
+
+        self.nextButton = QPushButton("SUIVANT")
+
+        self.nextButton.setEnabled(False)
+
+        self.nextButton.clicked.connect(
+
+            self.next_page
+
+        )
+
+        ###################################################
+
+        layout.addStretch()
+
+        layout.addWidget(title)
+
+        layout.addWidget(info)
+
+        layout.addSpacing(20)
+
+        layout.addWidget(self.timeLabel)
+
+        layout.addWidget(self.heartLabel)
+
+        layout.addWidget(self.bpmLabel)
+
+        layout.addSpacing(25)
+
+        layout.addWidget(self.startButton)
+
+        layout.addWidget(self.nextButton)
+
+        layout.addStretch()
+
+        self.setLayout(layout)
+
+            ###########################################################
+    # Réinitialiser la page
+    ###########################################################
+
+    def reset_page(self):
+
+        self.timer.stop()
+
+        self.remaining_time = 15
+
+        self.bpm = 0
+
+        self.timeLabel.setText("15")
+
+        self.bpmLabel.setText("-- BPM")
+
+        self.startButton.setEnabled(True)
+
+        self.nextButton.setEnabled(False)
+
+        self.heartLabel.setText("❤")
+
+
+    ###########################################################
+    # Commencer la mesure
+    ###########################################################
+
+    def start_measure(self):
+
+        self.reset_page()
+
+        self.startButton.setEnabled(False)
+
+        self.timer.start(1000)
+
+
+    ###########################################################
+    # Chronomètre
+    ###########################################################
+
+    def update_timer(self):
+
+        self.remaining_time -= 1
+
+        self.timeLabel.setText(str(self.remaining_time))
+
+        ###################################################
+        # Animation simple du cœur
+        ###################################################
+
+        if self.remaining_time % 2 == 0:
+
+            self.heartLabel.setStyleSheet("""
+
+                color:red;
+                font-size:90px;
+
+            """)
+
+        else:
+
+            self.heartLabel.setStyleSheet("""
+
+                color:red;
+                font-size:70px;
+
+            """)
+
+        ###################################################
+        # Simulation BPM
+        # Plus tard :
+        # self.bpm = max30102.readHeartRate()
+        ###################################################
+
+        self.bpm = 82
+
+        self.bpmLabel.setText(
+
+            f"{self.bpm} BPM"
+
+        )
+
+        ###################################################
+
+        if self.remaining_time <= 0:
+
+            self.timer.stop()
+
+            self.window.patient.frequence_cardiaque = self.bpm
+
+            self.startButton.setEnabled(True)
+
+            self.nextButton.setEnabled(True)
+
+            self.timeLabel.setText("Terminé")
+
+
+    ###########################################################
+    # Aller à la page suivante
+    ###########################################################
+
+    def next_page(self):
+
+        print("========== PATIENT ==========")
+
+        print("PPM :", self.window.patient.ppm)
+
+        print("Respiration :", self.window.patient.frequence_respiratoire)
+
+        print("Température :", self.window.patient.temperature)
+
+        print("Fréquence cardiaque :", self.window.patient.frequence_cardiaque)
+
+        print("=============================")
+
+        # self.window.show_blood_pressure()
+
+        ###########################################################
+#                 MAIN WINDOW
+###########################################################
+
+class MainWindow(QStackedWidget):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.setWindowTitle("Calcul MEWS")
+
+        self.resize(1024, 600)
+
+        ###################################################
+
+        self.patient = Patient()
+
+        ###################################################
+
+        self.welcomePage = WelcomePage(self)
+        self.ppmPage = PPMPage(self)
+        self.respirationPage = RespirationPage(self)
+        self.temperaturePage = TemperaturePage(self)
+        self.heartRatePage = HeartRatePage(self)
+
+        ###################################################
+
+        self.addWidget(self.welcomePage)
+        self.addWidget(self.ppmPage)
+        self.addWidget(self.respirationPage)
+        self.addWidget(self.temperaturePage)
+        self.addWidget(self.heartRatePage)
+
+        ###################################################
+
+        self.show_welcome()
+
+    ###################################################
+
+    def show_welcome(self):
+
+        self.setCurrentWidget(self.welcomePage)
+
+    ###################################################
+
+    def show_ppm(self):
+
+        self.ppmPage.reset_page()
+
+        self.setCurrentWidget(self.ppmPage)
+
+    ###################################################
+
+    def show_respiration(self):
+
+        self.respirationPage.reset_page()
+
+        self.setCurrentWidget(self.respirationPage)
+
+    ###################################################
+
+    def show_temperature(self):
+
+        self.temperaturePage.reset_page()
+
+        self.setCurrentWidget(self.temperaturePage)
+
+    ###################################################
+
+    def show_heart_rate(self):
+
+        self.heartRatePage.reset_page()
+
+        self.setCurrentWidget(self.heartRatePage)
+
+        ###########################################################
+#                    PROGRAMME
+###########################################################
+
+if __name__ == "__main__":
+
+    app = QApplication(sys.argv)
+
+    window = MainWindow()
+
+    window.show()
+
+    sys.exit(app.exec())
