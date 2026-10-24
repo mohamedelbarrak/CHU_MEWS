@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QVBoxLayout,
     QHBoxLayout,
-    QMessageBox,
     QSizePolicy,
     QStyle
 )
@@ -34,6 +33,7 @@ class PPMPage(QWidget):
 
             QLabel {
                 color: #243B53;
+                background: transparent;
             }
 
             QPushButton {
@@ -47,7 +47,6 @@ class PPMPage(QWidget):
                 background-color: #DCEEFE;
                 color: #145B9C;
                 border: 1px solid #A5CBF0;
-                border-radius: 8px;
             }
 
             QPushButton#backButton:hover {
@@ -77,6 +76,10 @@ class PPMPage(QWidget):
                 color: #B42332;
             }
 
+            QPushButton#clear:hover {
+                background-color: #F8CDCF;
+            }
+
             QPushButton#clear:pressed {
                 background-color: #F5B9BD;
             }
@@ -84,6 +87,10 @@ class PPMPage(QWidget):
             QPushButton#validate {
                 background-color: #D8F4E5;
                 color: #176C43;
+            }
+
+            QPushButton#validate:hover {
+                background-color: #C2EDD6;
             }
 
             QPushButton#validate:pressed {
@@ -96,6 +103,16 @@ class PPMPage(QWidget):
                 border-radius: 8px;
                 color: #193853;
                 font-size: 25px;
+                font-weight: bold;
+            }
+
+            QLabel#display[error="true"] {
+                border: 2px solid #E57373;
+            }
+
+            QLabel#errorLabel {
+                color: #C62828;
+                font-size: 13px;
                 font-weight: bold;
             }
         """)
@@ -117,14 +134,13 @@ class PPMPage(QWidget):
         back_button.setObjectName("backButton")
         back_button.setFixedSize(44, 40)
 
-        # Icône Qt centrée
         back_button.setIcon(
             self.style().standardIcon(
-                QStyle.StandardPixmap.SP_ArrowBack
+                QStyle.StandardPixmap.SP_ArrowLeft
             )
         )
-        back_button.setIconSize(QSize(24, 24))
 
+        back_button.setIconSize(QSize(24, 24))
         back_button.setCursor(Qt.PointingHandCursor)
         back_button.setToolTip("Retour à l'accueil")
         back_button.clicked.connect(self.go_back)
@@ -134,7 +150,6 @@ class PPMPage(QWidget):
         title.setFont(QFont("Arial", 21, QFont.Bold))
         title.setFixedHeight(40)
 
-        # Espace à droite pour centrer le titre
         right_space = QWidget()
         right_space.setFixedWidth(44)
 
@@ -155,8 +170,18 @@ class PPMPage(QWidget):
         # ===================================
         self.display = QLabel("")
         self.display.setObjectName("display")
+        self.display.setProperty("error", False)
         self.display.setAlignment(Qt.AlignCenter)
         self.display.setFixedHeight(44)
+
+        # ===================================
+        # MESSAGE D'ERREUR
+        # ===================================
+        self.errorLabel = QLabel("")
+        self.errorLabel.setObjectName("errorLabel")
+        self.errorLabel.setAlignment(Qt.AlignCenter)
+        self.errorLabel.setFixedHeight(24)
+        self.errorLabel.hide()
 
         # ===================================
         # PAVE NUMERIQUE
@@ -196,7 +221,7 @@ class PPMPage(QWidget):
         buttons = QHBoxLayout()
         buttons.setSpacing(8)
 
-        clear = QPushButton("Effacer")
+        clear = QPushButton("⌫ Effacer")
         clear.setObjectName("clear")
         clear.setFixedHeight(48)
         clear.setCursor(Qt.PointingHandCursor)
@@ -215,20 +240,21 @@ class PPMPage(QWidget):
         # ASSEMBLAGE FINAL
         # ===================================
         main_layout.addLayout(header)
-
         main_layout.addWidget(instruction)
 
-        # Espace entre l'instruction et le champ
         main_layout.addSpacing(10)
 
         main_layout.addWidget(self.display)
 
-        # Espace entre le champ et les chiffres
-        main_layout.addSpacing(20)
+        # Zone du message d'erreur
+        main_layout.addWidget(self.errorLabel)
+
+        # Espace avant le pavé numérique
+        main_layout.addSpacing(12)
 
         main_layout.addLayout(keypad)
 
-        # Espace entre le pavé numérique et les actions
+        # Espace avant les actions
         main_layout.addSpacing(14)
 
         main_layout.addLayout(buttons)
@@ -236,24 +262,60 @@ class PPMPage(QWidget):
         main_layout.addStretch(1)
 
     # ===================================
+    # AFFICHER OU MASQUER L'ERREUR
+    # ===================================
+    def set_error(self, message=""):
+
+        has_error = bool(message)
+
+        self.errorLabel.setText(message)
+        self.errorLabel.setVisible(has_error)
+
+        self.display.setProperty("error", has_error)
+
+        # Actualiser le style après modification
+        self.display.style().unpolish(self.display)
+        self.display.style().polish(self.display)
+        self.display.update()
+
+    # ===================================
     # RETOUR A LA PAGE D'ACCUEIL
     # ===================================
     def go_back(self):
+        self.set_error()
         self.main_window.go_to_welcome()
 
     # ===================================
-    # AJOUT D'UN CHIFFRE
+    # AJOUTER UN CHIFFRE
     # ===================================
     def add_digit(self, digit):
-        self.ppm += digit
-        self.display.setText(self.ppm)
+
+        if len(self.ppm) < 4:
+            self.ppm += digit
+            self.display.setText(self.ppm)
+
+        # Supprimer l'erreur dès la correction
+        self.set_error()
 
     # ===================================
-    # EFFACER LE PPM
+    # EFFACER LE DERNIER CHIFFRE
     # ===================================
     def clear(self):
+
+        if self.ppm:
+            self.ppm = self.ppm[:-1]
+            self.display.setText(self.ppm)
+
+        self.set_error()
+
+    # ===================================
+    # REINITIALISER COMPLETEMENT
+    # ===================================
+    def reset_page(self):
+
         self.ppm = ""
         self.display.setText("")
+        self.set_error()
 
     # ===================================
     # VALIDATION DU PPM
@@ -261,12 +323,17 @@ class PPMPage(QWidget):
     def validate(self):
 
         if len(self.ppm) != 4:
-            QMessageBox.warning(
-                self,
-                "PPM invalide",
-                "Veuillez saisir un PPM valide."
+
+            self.set_error(
+                "⚠ Le PPM doit contenir exactement 4 chiffres."
             )
             return
 
+        # Validation réussie
+        self.set_error()
+
+        # Sauvegarde dans Patient
         self.main_window.patient.ppm = self.ppm
+
+        # Aller vers RespirationPage
         self.main_window.go_to_respiration()
