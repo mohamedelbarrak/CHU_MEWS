@@ -25,7 +25,7 @@ class MainWindow(QStackedWidget):
 
         # Taille minimale (utile pendant le développement)
         #self.setMinimumSize(1280, 720)
-        self.setMinimumSize(1280, 720)
+        self.setMinimumSize(860, 280)
 
         # -------- Création des pages --------
         self.welcome_page = WelcomePage(self)
