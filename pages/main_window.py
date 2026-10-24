@@ -45,7 +45,7 @@ class MainWindow(QStackedWidget):
 
         # -------- Première page affichée --------
         self.setCurrentIndex(0)
-
+        self.resize(800, 480)
         # Pour la borne finale, décommente cette ligne :
         #self.showFullScreen()
 
