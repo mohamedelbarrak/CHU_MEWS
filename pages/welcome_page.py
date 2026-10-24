@@ -46,7 +46,9 @@ class WelcomePage(QWidget):
             }
         """)
 
-        # Layout principal
+        # ===================================
+        # LAYOUT PRINCIPAL
+        # ===================================
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 12, 20, 12)
         layout.setSpacing(0)
@@ -69,10 +71,11 @@ class WelcomePage(QWidget):
         # ===================================
         # BOUTON DEMARRER
         # ===================================
-        start_button = QPushButton("DÉMARRER")
+        start_button = QPushButton("DÉMARRER")#▶ 
         start_button.setObjectName("startButton")
         start_button.setFixedSize(130, 130)
         start_button.setCursor(Qt.PointingHandCursor)
+
         start_button.clicked.connect(
             self.main_window.go_to_ppm
         )
@@ -123,7 +126,16 @@ class WelcomePage(QWidget):
         info_layout.addLayout(supervisor_layout, 1)
 
         # ===================================
-        # ASSEMBLAGE
+        # PIED DE PAGE
+        # ===================================
+        footer = QLabel("Interface MEWS · CHU de Tanger")
+        footer.setAlignment(Qt.AlignCenter)
+        footer.setFont(QFont("Arial", 10))
+        footer.setStyleSheet("color: #728499;")
+        footer.setFixedHeight(18)
+
+        # ===================================
+        # ASSEMBLAGE FINAL
         # ===================================
         layout.addWidget(title)
         layout.addWidget(subtitle)
@@ -140,3 +152,8 @@ class WelcomePage(QWidget):
         layout.addLayout(info_layout)
 
         layout.addStretch()
+
+        layout.addWidget(
+            footer,
+            alignment=Qt.AlignCenter
+        )
