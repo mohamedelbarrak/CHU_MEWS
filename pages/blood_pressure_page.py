@@ -35,9 +35,6 @@ class BloodPressurePage(QWidget):
         # =========================================================
 
         self.setStyleSheet("""
-        QWidget {
-            background: #f5f7fa;
-        }
 
         QLabel {
             color: #2c3e50;

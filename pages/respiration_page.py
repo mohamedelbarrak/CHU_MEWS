@@ -111,12 +111,6 @@ class RespirationPage(QWidget):
 
         self.setStyleSheet("""
 
-        QWidget{
-
-            background:white;
-
-        }
-
         QLabel{
 
             color:#2c3e50;
