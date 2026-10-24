@@ -29,20 +29,20 @@ class WelcomePage(QWidget):
             }
 
             QPushButton#startButton {
-                background-color: #1976D2;
-                color: white;
-                border: none;
+                background-color: #DCEEFE;
+                color: #145B9C;
+                border: 2px solid #A5CBF0;
                 border-radius: 65px;
                 font-size: 18px;
                 font-weight: bold;
             }
 
             QPushButton#startButton:hover {
-                background-color: #1565C0;
+                background-color: #BDDDF9;
             }
 
             QPushButton#startButton:pressed {
-                background-color: #0D47A1;
+                background-color: #91C4F2;
             }
         """)
 
