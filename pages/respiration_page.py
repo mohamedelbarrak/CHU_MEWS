@@ -411,3 +411,4 @@ class RespirationPage(QWidget):
         self.startButton.setEnabled(True)
         self.respButton.setEnabled(False)
         self.nextButton.setEnabled(False)
+
