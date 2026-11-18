@@ -35,6 +35,7 @@ except ImportError as exc:
 # CONFIGURATION MODIFIABLE
 # ==========================================
 DUREE_SECONDES = 60       # Durée réelle de mesure (mettre 20 pour des tests)
+ALERTE_SANS_RESPIRATION_S = 10  # Alerte si 0 cycle détecté après 10 s (ou 5)
 I2C_BUS = 1               # Raspberry Pi : normalement /dev/i2c-1
 SDP810_ADRESSE = 0x25     # SDP810 : 0x25 (SDP811 : généralement 0x26)
 SEUIL_PA = 0.5            # Seuil en pascals, à ajuster sur des mesures réelles
@@ -119,7 +120,9 @@ class SDP810I2C:
 # ==========================================
 class MesureRespiratoireThread(QThread):
     mesure_demarre = Signal(float)  # Horodatage monotonic du début des 60 s
-    resultat = Signal(int)          # Nombre de cycles complets
+    respiration_detectee = Signal(int)  # Nombre de cycles, actualisé en direct
+    aucune_respiration = Signal(int)    # Aucun cycle lors des premières secondes
+    resultat = Signal(int)              # Nombre final de cycles complets
     erreur = Signal(str)
 
     def __init__(self, duree, parent=None):
@@ -162,6 +165,17 @@ class MesureRespiratoireThread(QThread):
                 if maintenant >= fin:
                     break
 
+                # Une absence de cycle complet au début impose de revoir
+                # le masque, le circuit et la détection avant de continuer.
+                # Cela ne permet PAS de savoir à lui seul si le masque est porté.
+                if (
+                    nb_respirations == 0
+                    and self.duree > ALERTE_SANS_RESPIRATION_S
+                    and maintenant - debut >= ALERTE_SANS_RESPIRATION_S
+                ):
+                    self.aucune_respiration.emit(ALERTE_SANS_RESPIRATION_S)
+                    return
+
                 try:
                     pression = (
                         capteur.lire_pression_pa() - zero_pression
@@ -202,6 +216,7 @@ class MesureRespiratoireThread(QThread):
                             debut_confirmation = maintenant
                         elif maintenant - debut_confirmation >= CONFIRMATION_S:
                             nb_respirations += 1
+                            self.respiration_detectee.emit(nb_respirations)
                             etat = "ATTENTE_INSPIRATION"
                             debut_confirmation = None
                     else:
@@ -353,13 +368,13 @@ class RespirationPage(QWidget):
 
         # Instructions : plus aucun appui sur un bouton après chaque respiration.
         self.instruction = QLabel(
-            "Le capteur compte automatiquement vos respirations. "
-            "Respirez normalement pendant la mesure."
+            "Portez bien votre masque. Le capteur compte automatiquement "
+            "vos respirations. Respirez normalement pendant la mesure."
         )
         self.instruction.setAlignment(Qt.AlignCenter)
         self.instruction.setFont(QFont("Arial", 13))
         self.instruction.setWordWrap(True)
-        self.instruction.setFixedHeight(42)
+        self.instruction.setFixedHeight(52)
 
         self.duration_label = QLabel(
             f"Durée du comptage : {self.duration} secondes"
@@ -379,8 +394,8 @@ class RespirationPage(QWidget):
         count_title.setObjectName("countTitle")
         count_title.setAlignment(Qt.AlignCenter)
 
-        # Résultat masqué avant la fin, même si le compteur interne avance.
-        self.countLabel = QLabel("—")
+        # Le nombre de cycles s'actualise en direct (sans bouton manuel).
+        self.countLabel = QLabel("0")
         self.countLabel.setObjectName("countLabel")
         self.countLabel.setAlignment(Qt.AlignCenter)
         count_container.addWidget(count_title)
@@ -394,11 +409,13 @@ class RespirationPage(QWidget):
         measurement_layout.addStretch(1)
 
         # Zone de statut : initialisation / mesure / résultat / erreur.
-        self.statusLabel = QLabel("Le résultat s'affichera à la fin des 60 secondes.")
+        self.statusLabel = QLabel(
+            "Portez bien votre masque, puis appuyez sur COMMENCER."
+        )
         self.statusLabel.setObjectName("statusLabel")
         self.statusLabel.setAlignment(Qt.AlignCenter)
         self.statusLabel.setWordWrap(True)
-        self.statusLabel.setMinimumHeight(40)
+        self.statusLabel.setMinimumHeight(52)
 
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(8)
@@ -444,9 +461,10 @@ class RespirationPage(QWidget):
         # Ne pas enregistrer une ancienne fréquence si une nouvelle mesure échoue.
         self.main_window.patient.frequence_respiratoire = None
 
+        self.startButton.setText("COMMENCER")
         self.startButton.setEnabled(False)
         self.nextButton.setEnabled(False)
-        self.statusLabel.setText(
+        self._set_status(
             "Initialisation et étalonnage du capteur… "
             "Ne créez pas de différence de pression pendant cette étape."
         )
@@ -455,6 +473,12 @@ class RespirationPage(QWidget):
         self.worker = thread
         thread.mesure_demarre.connect(
             lambda debut, t=thread: self.on_measure_started(t, debut)
+        )
+        thread.respiration_detectee.connect(
+            lambda cycles, t=thread: self.on_respiration_detected(t, cycles)
+        )
+        thread.aucune_respiration.connect(
+            lambda secondes, t=thread: self.on_no_breath_detected(t, secondes)
         )
         thread.resultat.connect(
             lambda cycles, t=thread: self.on_measure_finished(t, cycles)
@@ -469,7 +493,10 @@ class RespirationPage(QWidget):
             return
         self.running = True
         self.debut_reel = debut
-        self.statusLabel.setText("Mesure en cours. Résultat masqué jusqu'à la fin.")
+        self._set_status(
+            "Mesure en cours : respirez normalement, "
+            "le compteur s'actualise automatiquement."
+        )
         self.timer.start()
         self.update_timer()
 
@@ -481,6 +508,33 @@ class RespirationPage(QWidget):
         self.circular.setValue(self.remaining_time)
         # Seul le worker valide le résultat à la fin effective des 60 secondes.
 
+    def on_respiration_detected(self, thread, cycles):
+        """Signal émis par le capteur pour chaque inspiration/expiration complète."""
+        if self.worker is not thread or not self.running:
+            return
+        self.nb_respirations = cycles
+        self.countLabel.setText(str(cycles))
+
+    def on_no_breath_detected(self, thread, secondes):
+        """Interrompt la mesure si aucun cycle n'a été détecté au début."""
+        if self.worker is not thread or not self.running:
+            return
+        self.timer.stop()
+        self.running = False
+        self.mesure_valide = False
+        self.main_window.patient.frequence_respiratoire = None
+        self.nextButton.setEnabled(False)
+        self.startButton.setText("RECOMMENCER")
+        self.startButton.setEnabled(True)
+        self._set_status(
+            f"ALERTE : aucune respiration détectée après {secondes} s. "
+            "Portez bien votre masque, vérifiez les tuyaux, puis "
+            "appuyez sur RECOMMENCER. Si le patient semble ne pas "
+            "respirer, alertez immédiatement un soignant.",
+            alerte=True,
+        )
+        self._stop_worker()
+
     def on_measure_finished(self, thread, cycles):
         if self.worker is not thread:
             return
@@ -489,13 +543,14 @@ class RespirationPage(QWidget):
         self.remaining_time = 0
         self.circular.setValue(0)
         self.nb_respirations = cycles
-        self.countLabel.setText(str(cycles))
+        self.countLabel.setText(str(cycles))  # Conserver la valeur affichée en direct
 
         if cycles == 0:
             self.mesure_valide = False
-            self.statusLabel.setText(
+            self._set_status(
                 "Aucun cycle détecté : mesure non interprétable. "
-                "Vérifiez le montage et l'état du patient."
+                "Vérifiez le masque, les tuyaux et l'état du patient.",
+                alerte=True,
             )
             self.nextButton.setEnabled(False)
             self.main_window.patient.frequence_respiratoire = None
@@ -504,9 +559,10 @@ class RespirationPage(QWidget):
             frequence = cycles * 60.0 / self.duration
             self.main_window.patient.frequence_respiratoire = round(frequence)
             self.mesure_valide = True
-            self.statusLabel.setText(
-                f"Mesure terminée : {cycles} cycles, "
-                f"fréquence respiratoire {frequence:.1f} resp/min."
+            # Le compteur conserve sa valeur. Seule la fréquence apparaît ici.
+            self._set_status(
+                f"Mesure terminée. Fréquence respiratoire : "
+                f"{frequence:.1f} resp/min."
             )
             self.nextButton.setEnabled(True)
             print(
@@ -527,7 +583,8 @@ class RespirationPage(QWidget):
         self.nextButton.setEnabled(False)
         self.startButton.setEnabled(True)
         self.countLabel.setText("—")
-        self.statusLabel.setText(f"Erreur du capteur : {message}")
+        self.startButton.setText("RECOMMENCER")
+        self._set_status(f"Erreur du capteur : {message}", alerte=True)
         print("ERREUR SDP810 :", message)
 
     def next_page(self):
@@ -540,6 +597,18 @@ class RespirationPage(QWidget):
         self.reset_page()
         self.main_window.go_to_ppm()
 
+    def _set_status(self, message, alerte=False):
+        self.statusLabel.setText(message)
+        if alerte:
+            self.statusLabel.setStyleSheet(
+                "color: #B42318; font-size: 13px; font-weight: bold; "
+                "background-color: #FEE4E2; border-radius: 8px; padding: 5px;"
+            )
+        else:
+            self.statusLabel.setStyleSheet(
+                "color: #607D98; font-size: 13px; background: transparent;"
+            )
+
     def reset_page(self):
         self.timer.stop()
         self._stop_worker()
@@ -549,10 +618,12 @@ class RespirationPage(QWidget):
         self.remaining_time = self.duration
         self.nb_respirations = 0
         self.circular.setValue(self.duration)
-        self.countLabel.setText("—")
-        self.statusLabel.setText(
-            f"Le résultat s'affichera à la fin des {self.duration} secondes."
+        self.countLabel.setText("0")
+        self._set_status(
+            "Portez bien votre masque, puis appuyez sur COMMENCER. "
+            "Le nombre de respirations s'affichera en temps réel."
         )
+        self.startButton.setText("COMMENCER")
         self.startButton.setEnabled(True)
         self.nextButton.setEnabled(False)
 
