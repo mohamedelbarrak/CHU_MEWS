@@ -1,116 +1,132 @@
 #!/usr/bin/env python3
-"""Test continu TOF53200 par UART/Modbus RTU sur Raspberry Pi 5.
+"""Test continu du capteur TOF53200 sur le Raspberry Pi 4 (UART/Modbus).
 
-Commande de lecture experimentee: esclave 1, fonction 03, registre 0x0010.
-Ce registre est utilise par des ToF Modbus similaires, mais n'est pas confirme
-pour toutes les revisions de TOF53200. Aucun resultat n'est invente.
+Reprise fidèle du croquis Arduino fourni :
+- UART 9600 bauds, 8N1
+- commande Modbus 01 03 00 10 00 01 85 CF
+- réponse 7 octets : 01 03 02 DIST_H DIST_L CRC_LO CRC_HI
+- CRC16 Modbus, 3 tentatives, timeout 350 ms
 """
-import argparse
+
 import time
+import serial
 
-try:
-    import serial
-except ImportError:
-    raise SystemExit("Bibliotheque absente. Installer: sudo apt install python3-serial")
+# Raspberry Pi 4 : GPIO14 (TX), GPIO15 (RX), UART0 après configuration
+PORT = "/dev/ttyAMA0"
+BAUD = 9600
+COMMANDE = bytes.fromhex("01 03 00 10 00 01 85 CF")
+DELAI_REPONSE = 0.350       # secondes
+NB_TENTATIVES = 3
+PAUSE_TENTATIVES = 0.030  # secondes
+PAUSE_MESURES = 0.200     # secondes
 
 
-def crc16_modbus(data):
+def crc16_modbus(donnees: bytes) -> int:
     crc = 0xFFFF
-    for octet in data:
+    for octet in donnees:
         crc ^= octet
         for _ in range(8):
-            crc = (crc >> 1) ^ 0xA001 if crc & 1 else crc >> 1
+            if crc & 1:
+                crc = (crc >> 1) ^ 0xA001
+            else:
+                crc >>= 1
     return crc
 
 
-def fabriquer_requete():
-    contenu = bytes([0x01, 0x03, 0x00, 0x10, 0x00, 0x01])
-    crc = crc16_modbus(contenu)
-    return contenu + crc.to_bytes(2, 'little')
+def lire_distance_mm(port: serial.Serial):
+    """Retourne (distance_mm, diagnostic), ou (None, diagnostic)."""
+    port.reset_input_buffer()
+    port.write(COMMANDE)
+    port.flush()
 
+    tampon = bytearray()
+    donnees_recues = bytearray()
+    erreur_crc = False
+    debut = time.monotonic()
 
-def decoder(buffer):
-    """Retourne (etat, mm ou message), ou None si aucune trame reconnue."""
-    for i in range(len(buffer)):
-        if buffer[i] != 0x01 or i + 2 > len(buffer):
+    while time.monotonic() - debut < DELAI_REPONSE:
+        octet = port.read(1)
+        if not octet:
             continue
-        if i + 2 > len(buffer):
+
+        donnees_recues.extend(octet)
+        tampon.extend(octet)
+
+        # Se synchroniser sur l'en-tête 01 03 02
+        while tampon:
+            if tampon[0] != 0x01:
+                del tampon[0]
+            elif len(tampon) >= 2 and tampon[1] != 0x03:
+                del tampon[0]
+            elif len(tampon) >= 3 and tampon[2] != 0x02:
+                del tampon[0]
+            else:
+                break
+
+        if len(tampon) < 7:
             continue
-        fonction = buffer[i + 1]
-        if fonction == 0x83 and i + 5 <= len(buffer):
-            trame = bytes(buffer[i:i+5])
-            if crc16_modbus(trame[:-2]) == int.from_bytes(trame[-2:], 'little'):
-                return ("erreur", f"Exception Modbus 0x{trame[2]:02X} (registre ou commande refuse)")
-        if fonction == 0x03 and i + 3 <= len(buffer):
-            longueur = buffer[i + 2]
-            total = 3 + longueur + 2
-            if longueur > 32 or i + total > len(buffer):
-                continue
-            trame = bytes(buffer[i:i+total])
-            if crc16_modbus(trame[:-2]) != int.from_bytes(trame[-2:], 'little'):
-                continue
-            if longueur != 2:
-                return ("erreur", f"Longueur de donnees inattendue: {longueur}")
-            return ("distance", int.from_bytes(trame[3:5], 'big'))
-    return None
+
+        trame = bytes(tampon[:7])
+        del tampon[:7]
+        crc_recu = trame[5] | (trame[6] << 8)
+        crc_calcule = crc16_modbus(trame[:5])
+
+        if crc_recu != crc_calcule:
+            erreur_crc = True
+            continue
+
+        distance_mm = (trame[3] << 8) | trame[4]
+        if 0 < distance_mm <= 2000:
+            return distance_mm, "OK"
+        return None, f"Valeur hors plage : {distance_mm} mm"
+
+    if erreur_crc:
+        return None, "CRC invalide (vérifier les connexions UART)"
+    if donnees_recues:
+        return None, "Réponse non reconnue : " + donnees_recues.hex(" ").upper()
+    return None, "Aucune réponse du capteur (port/fils/alimentation/débit)"
 
 
 def main():
-    p = argparse.ArgumentParser(description="Test TOF53200 par UART (mode Modbus)")
-    p.add_argument('--port', default='/dev/ttyAMA0', help='Port UART du Raspberry Pi 5')
-    p.add_argument('--baud', default=115200, type=int, help='Debit UART')
-    args = p.parse_args()
+    print("=== TEST TOF53200 - RASPBERRY PI 4 ===", flush=True)
+    print(f"Port : {PORT} | Débit : {BAUD} bauds", flush=True)
+    print("Distance affichée en continu. Arrêt : Ctrl+C\n", flush=True)
+    compteur = 0
 
-    requete = fabriquer_requete()
-    print("=== TOF53200 - TEST DE DISTANCE EN CONTINU ===")
-    print(f"Port : {args.port} | Debit : {args.baud} bauds")
-    print("Mode d'essai : Modbus RTU, registre 0x0010 (a confirmer selon module)")
-    print("Requete envoyee :", requete.hex(' ').upper())
-    print("Arret : Ctrl+C\n")
+    while True:
+        try:
+            with serial.Serial(PORT, baudrate=BAUD, bytesize=8,
+                               parity=serial.PARITY_NONE, stopbits=1,
+                               timeout=0.02, write_timeout=0.5) as tof:
+                print("[OK] Port UART ouvert.", flush=True)
 
-    try:
-        with serial.Serial(args.port, args.baud, timeout=0.05) as port:
-            numero = 0
-            while True:
-                debut = time.monotonic()
-                numero += 1
-                try:
-                    port.reset_input_buffer()
-                    port.write(requete)
-                    port.flush()
-                    reponse = bytearray()
-                    delai = time.monotonic() + 0.5
-                    resultat = None
-                    while time.monotonic() < delai:
-                        paquet = port.read(max(1, min(port.in_waiting, 64)))
-                        if paquet:
-                            reponse.extend(paquet)
-                            resultat = decoder(reponse)
-                            if resultat is not None:
-                                break
+                while True:
+                    compteur += 1
+                    distance = None
+                    diagnostic = ""
+                    for essai in range(NB_TENTATIVES):
+                        distance, diagnostic = lire_distance_mm(tof)
+                        if distance is not None:
+                            break
+                        if essai < NB_TENTATIVES - 1:
+                            time.sleep(PAUSE_TENTATIVES)
 
-                    print(f"[{numero}] ", end='')
-                    if resultat and resultat[0] == "distance":
-                        mm = resultat[1]
-                        if 0 < mm <= 2000:
-                            print(f"Distance : {mm / 10:.1f} cm ({mm} mm)")
-                        else:
-                            print(f"Valeur hors plage / invalide : {mm} mm")
-                    elif resultat:
-                        print(resultat[1])
-                    elif reponse:
-                        print("Trame recue mais non reconnue :", reponse.hex(' ').upper())
+                    if distance is not None:
+                        print(f"[{compteur}] Distance : {distance / 10:.1f} cm | "
+                              f"{distance} mm", flush=True)
                     else:
-                        print("Aucune reponse UART (verifier TXD/RXD, port, mode et protocole)")
-                except serial.SerialException as e:
-                    print("Erreur UART pendant la lecture :", e)
-                time.sleep(max(0, 1.0 - (time.monotonic() - debut)))
-    except serial.SerialException as e:
-        print(f"Impossible d'ouvrir {args.port}: {e}")
-        print("Verifier l'activation d'UART0 (overlay uart0-pi5) et le port disponible.")
-    except KeyboardInterrupt:
-        print("\nTest arrete manuellement.")
+                        print(f"[{compteur}] Mesure indisponible — {diagnostic}",
+                              flush=True)
+                    time.sleep(PAUSE_MESURES)
+
+        except KeyboardInterrupt:
+            print("\nTest arrêté par l'utilisateur.")
+            return
+        except (serial.SerialException, OSError) as exc:
+            print(f"[ERREUR UART] {exc}", flush=True)
+            print("Nouvel essai dans 2 secondes...", flush=True)
+            time.sleep(2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
