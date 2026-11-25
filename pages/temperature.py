@@ -692,9 +692,9 @@ class TemperaturePage(QWidget):
         # Affichage
         # --------------------------------------------------
 
-        self.temperatureLabel.setText(
-            f"{temperature:.1f} °C"
-        )
+        #self.temperatureLabel.setText(
+        #    f"{temperature:.1f} °C"
+        #)
 
         self.thermometer.setTemperature(
             temperature
