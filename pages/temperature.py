@@ -800,7 +800,7 @@ class TemperaturePage(QWidget):
         )
 
         self.infoLabel.setText(
-            "Température corporelle estimée (prototype)."
+            "Température corporelle mesurée :"
         )
 
         # --------------------------------------------------
