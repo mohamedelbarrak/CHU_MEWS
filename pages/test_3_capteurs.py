@@ -13,7 +13,7 @@ from smbus2 import SMBus, i2c_msg
 # ==================================================
 
 PORT_TEMPERATURE = "/dev/ttyAMA0"
-PORT_DISTANCE = "/dev/ttyAMA2"
+PORT_DISTANCE = "/dev/ttyAMA3"
 
 BAUD = 9600
 
