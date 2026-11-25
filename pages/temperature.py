@@ -148,28 +148,8 @@ class ThermometerWidget(QWidget):
             (bulb_radius - 8) * 2
         )
 
-        # ==================================================
-        # VALEUR TEMPERATURE
-        # ==================================================
-
-        painter.setPen(Qt.black)
-
-        painter.setFont(
-            QFont(
-                "Arial",
-                18,
-                QFont.Bold
-            )
-        )
-
-        painter.drawText(
-            0,
-            480 - 35,
-            220,
-            40,
-            Qt.AlignCenter,
-            f"{self.temperature:.1f} °C"
-        )
+        # Le thermomètre reste uniquement graphique.
+        # La valeur numérique est affichée par temperatureLabel après la mesure.
 
 
 # ==========================================================
@@ -692,9 +672,9 @@ class TemperaturePage(QWidget):
         # Affichage
         # --------------------------------------------------
 
-        #self.temperatureLabel.setText(
-        #    f"{temperature:.1f} °C"
-        #)
+        self.temperatureLabel.setText(
+            f"{temperature:.1f} °C"
+        )
 
         self.thermometer.setTemperature(
             temperature
@@ -705,7 +685,7 @@ class TemperaturePage(QWidget):
         )
 
         self.infoLabel.setText(
-            "Température corporelle mesurée avec succès."
+            "Température corporelle estimée (prototype)."
         )
 
         # --------------------------------------------------
