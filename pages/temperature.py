@@ -1,6 +1,6 @@
 import time
 import serial
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QSize
 from PySide6.QtGui import QFont, QPainter, QColor
 from PySide6.QtWidgets import (
     QWidget,
@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QMessageBox,
+    QStyle,
+    QSizePolicy,
 )
 
 
@@ -181,6 +183,7 @@ class TemperaturePage(QWidget):
         super().__init__()
 
         self.main_window = main_window
+        self.setObjectName("temperaturePage")
 
         # ==================================================
         # VARIABLES
@@ -207,53 +210,44 @@ class TemperaturePage(QWidget):
         # ==================================================
 
         self.setStyleSheet("""
-
-        QWidget {
-
-            background: #f5f7fa;
-
-        }
-
-        QLabel {
-
-            color: #2c3e50;
-
-        }
-
-        QPushButton {
-
-            background: #1976D2;
-
-            color: white;
-
-            border: none;
-
-            border-radius: 14px;
-
-            font-size: 20px;
-
-            font-weight: bold;
-
-            min-height: 42px;
-
-            padding: 4px 10px;
-
-        }
-
-        QPushButton:hover {
-
-            background: #1565C0;
-
-        }
-
-        QPushButton:disabled {
-
-            background: #bdbdbd;
-
-            color: #eeeeee;
-
-        }
-
+            QWidget#temperaturePage { background-color: #F4F7FA; }
+            QLabel { color: #243B53; background: transparent; }
+            QPushButton {
+                border: none;
+                border-radius: 8px;
+                font-size: 17px;
+                font-weight: bold;
+            }
+            QPushButton#backButton, QPushButton#startButton {
+                background-color: #DCEEFE;
+                color: #145B9C;
+                border: 1px solid #A5CBF0;
+            }
+            QPushButton#backButton:hover, QPushButton#startButton:hover {
+                background-color: #BDDDF9;
+            }
+            QPushButton#nextButton {
+                background-color: #D8F4E5;
+                color: #176C43;
+            }
+            QPushButton#nextButton:pressed { background-color: #A9E6C4; }
+            QPushButton:disabled {
+                background-color: #E2E5E9;
+                color: #9BA3AD;
+                border: 1px solid #D7DCE1;
+            }
+            QPushButton#stopButton {
+                background-color: #FEE4E2;
+                color: #B42318;
+                border: 1px solid #F4B4AF;
+            }
+            QPushButton#stopButton:hover { background-color: #FBCBC7; }
+            QPushButton#backButton:disabled, QPushButton#startButton:disabled,
+            QPushButton#stopButton:disabled, QPushButton#nextButton:disabled {
+                background-color: #E2E5E9;
+                color: #9BA3AD;
+                border: 1px solid #D7DCE1;
+            }
         """)
 
         # ==================================================
@@ -262,38 +256,35 @@ class TemperaturePage(QWidget):
 
         layout = QVBoxLayout(self)
 
-        layout.setContentsMargins(
-            12,
-            8,
-            12,
-            8
-        )
-
+        layout.setContentsMargins(16, 8, 16, 12)
         layout.setSpacing(5)
 
-        # ==================================================
-        # TITRE
-        # ==================================================
+        # En-tête identique à la page respiration
+        header = QHBoxLayout()
+        header.setSpacing(8)
 
-        self.titleLabel = QLabel(
-            "Mesure de la température"
+        self.backButton = QPushButton()
+        self.backButton.setObjectName("backButton")
+        self.backButton.setFixedSize(44, 40)
+        self.backButton.setCursor(Qt.PointingHandCursor)
+        self.backButton.setToolTip("Retour à la tension artérielle")
+        self.backButton.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowLeft)
         )
+        self.backButton.setIconSize(QSize(24, 24))
+        self.backButton.clicked.connect(self.go_back)
 
-        self.titleLabel.setAlignment(
-            Qt.AlignCenter
-        )
+        self.titleLabel = QLabel("Mesure de la température")
+        self.titleLabel.setAlignment(Qt.AlignCenter)
+        self.titleLabel.setFont(QFont("Arial", 21, QFont.Bold))
+        self.titleLabel.setFixedHeight(40)
 
-        self.titleLabel.setFont(
-            QFont(
-                "Arial",
-                18,
-                QFont.Bold
-            )
-        )
-
-        layout.addWidget(
-            self.titleLabel
-        )
+        right_space = QWidget()
+        right_space.setFixedWidth(44)
+        header.addWidget(self.backButton)
+        header.addWidget(self.titleLabel, 1)
+        header.addWidget(right_space)
+        layout.addLayout(header)
 
         # ==================================================
         # ESPACE
@@ -403,117 +394,31 @@ class TemperaturePage(QWidget):
 
         layout.addStretch()
 
-        # ==================================================
-        # BOUTON COMMENCER
-        # ==================================================
-
-        self.startButton = QPushButton(
-            "COMMENCER"
-        )
-
-        self.startButton.setMinimumHeight(
-            48
-        )
-
-        self.startButton.setMinimumWidth(
-            160
-        )
-
-        self.startButton.clicked.connect(
-            self.start_measure
-        )
-
-        # ==================================================
-        # BOUTON ARRETER
-        # ==================================================
-
-        self.stopButton = QPushButton(
-            "ARRÊTER"
-        )
-
-        self.stopButton.setMinimumHeight(
-            48
-        )
-
-        self.stopButton.setMinimumWidth(
-            160
-        )
-
-        self.stopButton.setEnabled(
-            False
-        )
-
-        self.stopButton.clicked.connect(
-            self.stop_measure
-        )
-
-        # ==================================================
-        # BOUTON SUIVANT
-        # ==================================================
-
-        self.nextButton = QPushButton(
-            "SUIVANT"
-        )
-
-        self.nextButton.setMinimumHeight(
-            48
-        )
-
-        self.nextButton.setMinimumWidth(
-            160
-        )
-
-        self.nextButton.setEnabled(
-            False
-        )
-
-        self.nextButton.clicked.connect(
-            self.next_page
-        )
-
-        # ==================================================
-        # LIGNE DES 3 BOUTONS
-        # ==================================================
-
+        # Boutons : même forme et mêmes dimensions que la page respiration.
         buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(8)
 
-        buttons_layout.setSpacing(
-            20
-        )
+        self.startButton = QPushButton("COMMENCER")
+        self.startButton.setObjectName("startButton")
+        self.startButton.clicked.connect(self.start_measure)
 
-        # Centrage horizontal
+        self.stopButton = QPushButton("ARRÊTER")
+        self.stopButton.setObjectName("stopButton")
+        self.stopButton.setEnabled(False)
+        self.stopButton.clicked.connect(self.stop_measure)
 
-        buttons_layout.addStretch()
+        self.nextButton = QPushButton("SUIVANT")
+        self.nextButton.setObjectName("nextButton")
+        self.nextButton.setEnabled(False)
+        self.nextButton.clicked.connect(self.next_page)
 
-        buttons_layout.addWidget(
-            self.startButton
-        )
+        for button in (self.startButton, self.stopButton, self.nextButton):
+            button.setFixedHeight(55)
+            button.setCursor(Qt.PointingHandCursor)
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            buttons_layout.addWidget(button, 1)
 
-        buttons_layout.addWidget(
-            self.stopButton
-        )
-
-        buttons_layout.addWidget(
-            self.nextButton
-        )
-
-        buttons_layout.addStretch()
-
-        # Ajouter les boutons au layout principal
-
-        layout.addLayout(
-            buttons_layout
-        )
-
-        # ==================================================
-        # PETIT ESPACE EN BAS
-        # ==================================================
-
-        layout.addSpacing(2)
-
-        self.setLayout(
-            layout
-        )
+        layout.addLayout(buttons_layout)
 
     # ==========================================================
     # DEMARRER LA MESURE
@@ -800,7 +705,7 @@ class TemperaturePage(QWidget):
         )
 
         self.infoLabel.setText(
-            "Température corporelle mesurée :"
+            "Température corporelle mesurée avec succès."
         )
 
         # --------------------------------------------------
@@ -959,6 +864,11 @@ class TemperaturePage(QWidget):
     # ==========================================================
     # RESET DE LA PAGE
     # ==========================================================
+
+    def go_back(self):
+        # Arrêter la mesure et fermer les UART avant de quitter la page.
+        self.reset_page()
+        self.main_window.go_to_blood_pressure()
 
     def reset_page(self):
 
