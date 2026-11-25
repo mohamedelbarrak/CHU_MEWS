@@ -1,6 +1,7 @@
-
-from PySide6.QtCore import Qt, QTimer, QSize, QRectF
-from PySide6.QtGui import QFont, QPainter, QColor, QPen
+import time
+import serial
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QPainter, QColor
 from PySide6.QtWidgets import (
     QWidget,
     QLabel,
@@ -8,67 +9,88 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QMessageBox,
-    QFrame,
-    QSizePolicy,
-    QStyle
 )
 
 
-# ==========================================
+# ==========================================================
 # WIDGET THERMOMETRE
-# ==========================================
+# ==========================================================
 
 class ThermometerWidget(QWidget):
 
     def __init__(self):
+
         super().__init__()
 
-        self.temperature = 35.0
-        self.setFixedSize(155, 215)
+        self.temperature = 0.0
+
+        # Thermomètre plus grand
+        self.setMinimumSize(140, 135)
+        self.setMaximumHeight(170)
 
     def setTemperature(self, temperature):
+
         self.temperature = temperature
+
         self.update()
 
     def paintEvent(self, event):
+
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
 
-        # Coordonnees internes
-        center_x = 65
-        top_y = 12
-        bottom_y = 166
-        bulb_y = 175
+        painter.setRenderHint(
+            QPainter.Antialiasing
+        )
 
-        tube_width = 23
-        bulb_radius = 30
+        # ==================================================
+        # POSITION DU THERMOMETRE
+        # ==================================================
 
-        # Tube gris
+        painter.scale(self.width() / 220, self.height() / 500)
+        center_x = 110
+
+        bottom_y = 395
+
+        top_y = 35
+
+        tube_width = 40
+
+        bulb_radius = 50
+
+        # ==================================================
+        # TUBE GRIS
+        # ==================================================
+
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#D9E1E8"))
+
+        painter.setBrush(
+            QColor(220, 220, 220)
+        )
 
         painter.drawRoundedRect(
-            QRectF(
-                center_x - tube_width / 2,
-                top_y,
-                tube_width,
-                bulb_y - top_y
-            ),
-            tube_width / 2,
-            tube_width / 2
+            center_x - tube_width // 2,
+            top_y,
+            tube_width,
+            bottom_y - top_y,
+            tube_width // 2,
+            tube_width // 2
         )
 
-        # Bulbe gris
+        # ==================================================
+        # BULBE GRIS
+        # ==================================================
+
         painter.drawEllipse(
-            QRectF(
-                center_x - bulb_radius,
-                bulb_y - bulb_radius,
-                bulb_radius * 2,
-                bulb_radius * 2
-            )
+            center_x - bulb_radius,
+            bottom_y - 15,
+            bulb_radius * 2,
+            bulb_radius * 2
         )
 
-        # Calcul de la temperature
+        # ==================================================
+        # LIMITES TEMPERATURE
+        # ==================================================
+
         minimum = 35.0
         maximum = 42.0
 
@@ -78,449 +100,609 @@ class ThermometerWidget(QWidget):
         )
 
         percentage = (
-            (value - minimum) /
-            (maximum - minimum)
+            value - minimum
+        ) / (
+            maximum - minimum
+        )
+
+        # ==================================================
+        # HAUTEUR DU LIQUIDE
+        # ==================================================
+
+        liquid_height = int(
+            percentage *
+            (bottom_y - top_y - 20)
         )
 
         liquid_top = (
-            bottom_y -
-            percentage * (bottom_y - top_y)
+            bottom_y - 10 - liquid_height
         )
 
-        # Liquide bleu
-        painter.setBrush(QColor("#1976D2"))
+        # ==================================================
+        # LIQUIDE BLEU
+        # ==================================================
+
+        painter.setBrush(
+            QColor("#1976D2")
+        )
 
         painter.drawRoundedRect(
-            QRectF(
-                center_x - 7,
-                liquid_top,
-                14,
-                bulb_y - liquid_top
-            ),
-            7,
-            7
+            center_x - 12,
+            liquid_top,
+            24,
+            liquid_height,
+            12,
+            12
         )
 
-        # Bulbe bleu
+        # ==================================================
+        # BULBE BLEU
+        # ==================================================
+
         painter.drawEllipse(
-            QRectF(
-                center_x - 23,
-                bulb_y - 23,
-                46,
-                46
+            center_x - bulb_radius + 8,
+            bottom_y - 7,
+            (bulb_radius - 8) * 2,
+            (bulb_radius - 8) * 2
+        )
+
+        # ==================================================
+        # VALEUR TEMPERATURE
+        # ==================================================
+
+        painter.setPen(Qt.black)
+
+        painter.setFont(
+            QFont(
+                "Arial",
+                18,
+                QFont.Bold
             )
         )
 
-        # Graduations
-        painter.setPen(
-            QPen(QColor("#8292A2"), 1.5)
+        painter.drawText(
+            0,
+            480 - 35,
+            220,
+            40,
+            Qt.AlignCenter,
+            f"{self.temperature:.1f} °C"
         )
 
-        painter.setFont(QFont("Arial", 10))
 
-        for temperature in range(35, 43):
-            y = (
-                bottom_y -
-                ((temperature - 35) / 7) *
-                (bottom_y - top_y)
-            )
-
-            painter.drawLine(
-                int(center_x + 17),
-                int(y),
-                int(center_x + 25),
-                int(y)
-            )
-
-            painter.drawText(
-                int(center_x + 30),
-                int(y + 4),
-                f"{temperature}°"
-            )
-
-
-# ==========================================
+# ==========================================================
 # PAGE TEMPERATURE
-# ==========================================
+# ==========================================================
 
 class TemperaturePage(QWidget):
 
     def __init__(self, main_window):
+
         super().__init__()
 
         self.main_window = main_window
-        self.setObjectName("temperaturePage")
 
-        # Variables
+        # ==================================================
+        # VARIABLES
+        # ==================================================
+
         self.temperature = 0.0
-        self.measure_running = False
-        self.elapsed_time = 0
-        self.measure_valid = False
 
-        # ===================================
+        self.measure_running = False
+
+        self.elapsed_time = 0
+
+        # ==================================================
         # TIMER
-        # ===================================
+        # ==================================================
+
         self.timer = QTimer(self)
+
         self.timer.timeout.connect(
             self.check_measurement
         )
 
-        # ===================================
-        # STYLE
-        # ===================================
+        # ==================================================
+        # STYLE GENERAL
+        # ==================================================
+
         self.setStyleSheet("""
-            QWidget#temperaturePage {
-                background-color: #F4F7FA;
-            }
 
-            QLabel {
-                color: #243B53;
-                background: transparent;
-            }
+        QWidget {
 
-            QPushButton {
-                border: none;
-                border-radius: 8px;
-                font-size: 17px;
-                font-weight: bold;
-            }
+            background: #f5f7fa;
 
-            QPushButton#backButton {
-                background-color: #DCEEFE;
-                border: 1px solid #A5CBF0;
-            }
+        }
 
-            QPushButton#backButton:hover {
-                background-color: #BDDDF9;
-            }
+        QLabel {
 
-            QPushButton#backButton:pressed {
-                background-color: #91C4F2;
-            }
+            color: #2c3e50;
 
-            QPushButton#startButton {
-                background-color: #DCEEFE;
-                color: #145B9C;
-                border: 1px solid #A5CBF0;
-            }
+        }
 
-            QPushButton#stopButton {
-                background-color: #FCE1E1;
-                color: #B42332;
-            }
+        QPushButton {
 
-            QPushButton#nextButton {
-                background-color: #D8F4E5;
-                color: #176C43;
-            }
+            background: #1976D2;
 
-            QPushButton#startButton:pressed {
-                background-color: #91C4F2;
-            }
+            color: white;
 
-            QPushButton#stopButton:pressed {
-                background-color: #F5B9BD;
-            }
+            border: none;
 
-            QPushButton#nextButton:pressed {
-                background-color: #A9E6C4;
-            }
+            border-radius: 14px;
 
-            QPushButton:disabled {
-                background-color: #E2E5E9;
-                color: #9BA3AD;
-                border: 1px solid #D7DCE1;
-            }
+            font-size: 20px;
 
-            QFrame#resultCard {
-                background-color: white;
-                border: 1px solid #DCE6F0;
-                border-radius: 12px;
-            }
+            font-weight: bold;
 
-            QLabel#temperatureValue {
-                color: #145B9C;
-                font-size: 34px;
-                font-weight: bold;
-            }
+            min-height: 42px;
 
-            QLabel#temperatureTitle {
-                color: #607D98;
-                font-size: 13px;
-                font-weight: bold;
-            }
+            padding: 4px 10px;
 
-            QLabel#statusLabel {
-                color: #243B53;
-                font-size: 17px;
-                font-weight: bold;
-            }
+        }
+
+        QPushButton:hover {
+
+            background: #1565C0;
+
+        }
+
+        QPushButton:disabled {
+
+            background: #bdbdbd;
+
+            color: #eeeeee;
+
+        }
+
         """)
 
-        # ===================================
+        # ==================================================
         # LAYOUT PRINCIPAL
-        # ===================================
+        # ==================================================
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 8, 16, 12)
-        layout.setSpacing(8)
 
-        # ===================================
-        # RETOUR + TITRE
-        # ===================================
-        header = QHBoxLayout()
-        header.setSpacing(8)
-
-        back_button = QPushButton()
-        back_button.setObjectName("backButton")
-        back_button.setFixedSize(44, 40)
-
-        back_button.setIcon(
-            self.style().standardIcon(
-                QStyle.StandardPixmap.SP_ArrowLeft
-            )
+        layout.setContentsMargins(
+            12,
+            8,
+            12,
+            8
         )
 
-        back_button.setIconSize(QSize(24, 24))
-        back_button.setCursor(Qt.PointingHandCursor)
-        back_button.setToolTip(
-            "Retour à la pression artérielle"
-        )
+        layout.setSpacing(5)
 
-        back_button.clicked.connect(self.go_back)
+        # ==================================================
+        # TITRE
+        # ==================================================
 
         self.titleLabel = QLabel(
             "Mesure de la température"
         )
 
-        self.titleLabel.setFont(
-            QFont("Arial", 21, QFont.Bold)
-        )
-
-        self.titleLabel.setAlignment(Qt.AlignCenter)
-        self.titleLabel.setFixedHeight(40)
-
-        right_space = QWidget()
-        right_space.setFixedWidth(44)
-
-        header.addWidget(back_button)
-        header.addWidget(self.titleLabel, 1)
-        header.addWidget(right_space)
-
-        # ===================================
-        # INSTRUCTIONS
-        # ===================================
-        self.infoLabel = QLabel(
-            "Approchez le front du capteur, "
-            "puis appuyez sur COMMENCER."
-        )
-
-        self.infoLabel.setAlignment(Qt.AlignCenter)
-        self.infoLabel.setFont(QFont("Arial", 12))
-        self.infoLabel.setWordWrap(True)
-        self.infoLabel.setFixedHeight(35)
-
-        # ===================================
-        # THERMOMETRE
-        # ===================================
-        self.thermometer = ThermometerWidget()
-
-        # ===================================
-        # CARTE DE RESULTAT
-        # ===================================
-        result_card = QFrame()
-        result_card.setObjectName("resultCard")
-        result_card.setFixedHeight(185)
-
-        result_layout = QVBoxLayout(result_card)
-        result_layout.setContentsMargins(15, 12, 15, 12)
-        result_layout.setSpacing(8)
-
-        temperature_title = QLabel("TEMPÉRATURE")
-        temperature_title.setObjectName(
-            "temperatureTitle"
-        )
-        temperature_title.setAlignment(Qt.AlignCenter)
-
-        self.temperatureLabel = QLabel("--.- °C")
-        self.temperatureLabel.setObjectName(
-            "temperatureValue"
-        )
-        self.temperatureLabel.setAlignment(
+        self.titleLabel.setAlignment(
             Qt.AlignCenter
         )
 
-        # Séparateur
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet(
-            "background-color: #DCE6F0;"
-            "max-height: 1px;"
-            "border: none;"
+        self.titleLabel.setFont(
+            QFont(
+                "Arial",
+                18,
+                QFont.Bold
+            )
         )
 
-        self.statusLabel = QLabel(
-            "Prêt pour la mesure"
+        layout.addWidget(
+            self.titleLabel
         )
-        self.statusLabel.setObjectName("statusLabel")
-        self.statusLabel.setAlignment(Qt.AlignCenter)
-        self.statusLabel.setWordWrap(True)
 
-        result_layout.addWidget(temperature_title)
-        result_layout.addWidget(self.temperatureLabel)
-        result_layout.addWidget(separator)
-        result_layout.addWidget(self.statusLabel)
+        # ==================================================
+        # ESPACE
+        # ==================================================
 
-        # ===================================
-        # THERMOMETRE + RESULTAT
-        # ===================================
-        measurement_layout = QHBoxLayout()
-        measurement_layout.setSpacing(25)
+        layout.addSpacing(2)
 
-        measurement_layout.addStretch(1)
+        # ==================================================
+        # INSTRUCTIONS
+        # ==================================================
 
-        measurement_layout.addWidget(
+        self.infoLabel = QLabel(
+
+            "Veuillez rapprocher votre tête du capteur.\n"
+            "Cliquez sur COMMENCER, puis approchez votre front."
+
+        )
+
+        self.infoLabel.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.infoLabel.setFont(
+            QFont(
+                "Arial",
+                15,
+                QFont.Bold
+            )
+        )
+
+        layout.addWidget(
+            self.infoLabel
+        )
+
+        # ==================================================
+        # ESPACE
+        # ==================================================
+
+        layout.addSpacing(2)
+
+        # ==================================================
+        # THERMOMETRE
+        # ==================================================
+
+        self.thermometer = ThermometerWidget()
+
+        layout.addWidget(
             self.thermometer,
             alignment=Qt.AlignCenter
         )
 
-        measurement_layout.addWidget(
-            result_card,
-            2
+        # ==================================================
+        # VALEUR TEMPERATURE
+        # ==================================================
+
+        self.temperatureLabel = QLabel(
+            "--.- °C"
         )
 
-        measurement_layout.addStretch(1)
+        self.temperatureLabel.setAlignment(
+            Qt.AlignCenter
+        )
 
-        # ===================================
-        # BOUTONS
-        # ===================================
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(8)
+        self.temperatureLabel.setFont(
+            QFont(
+                "Arial",
+                24,
+                QFont.Bold
+            )
+        )
 
-        self.startButton = QPushButton("COMMENCER")
-        self.startButton.setObjectName("startButton")
-        self.startButton.setFixedHeight(52)
+        layout.addWidget(
+            self.temperatureLabel
+        )
+
+        # ==================================================
+        # ETAT
+        # ==================================================
+
+        self.statusLabel = QLabel(
+            "Prêt pour la mesure"
+        )
+
+        self.statusLabel.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.statusLabel.setFont(
+            QFont(
+                "Arial",
+                18,
+                QFont.Bold
+            )
+        )
+
+        layout.addWidget(
+            self.statusLabel
+        )
+
+        # ==================================================
+        # ESPACE FLEXIBLE
+        # ==================================================
+
+        # Permet de pousser les boutons vers le bas
+
+        layout.addStretch()
+
+        # ==================================================
+        # BOUTON COMMENCER
+        # ==================================================
+
+        self.startButton = QPushButton(
+            "COMMENCER"
+        )
+
+        self.startButton.setMinimumHeight(
+            48
+        )
+
+        self.startButton.setMinimumWidth(
+            160
+        )
+
         self.startButton.clicked.connect(
             self.start_measure
         )
 
-        self.stopButton = QPushButton("ARRÊTER")
-        self.stopButton.setObjectName("stopButton")
-        self.stopButton.setFixedHeight(52)
-        self.stopButton.setEnabled(False)
+        # ==================================================
+        # BOUTON ARRETER
+        # ==================================================
+
+        self.stopButton = QPushButton(
+            "ARRÊTER"
+        )
+
+        self.stopButton.setMinimumHeight(
+            48
+        )
+
+        self.stopButton.setMinimumWidth(
+            160
+        )
+
+        self.stopButton.setEnabled(
+            False
+        )
+
         self.stopButton.clicked.connect(
             self.stop_measure
         )
 
-        self.nextButton = QPushButton("SUIVANT")
-        self.nextButton.setObjectName("nextButton")
-        self.nextButton.setFixedHeight(52)
-        self.nextButton.setEnabled(False)
+        # ==================================================
+        # BOUTON SUIVANT
+        # ==================================================
+
+        self.nextButton = QPushButton(
+            "SUIVANT"
+        )
+
+        self.nextButton.setMinimumHeight(
+            48
+        )
+
+        self.nextButton.setMinimumWidth(
+            160
+        )
+
+        self.nextButton.setEnabled(
+            False
+        )
+
         self.nextButton.clicked.connect(
             self.next_page
         )
 
-        for button in (
-            self.startButton,
-            self.stopButton,
-            self.nextButton
-        ):
-            button.setCursor(Qt.PointingHandCursor)
-            button.setSizePolicy(
-                QSizePolicy.Expanding,
-                QSizePolicy.Fixed
-            )
-            buttons_layout.addWidget(button, 1)
+        # ==================================================
+        # LIGNE DES 3 BOUTONS
+        # ==================================================
 
-        # ===================================
-        # ASSEMBLAGE FINAL
-        # ===================================
-        layout.addLayout(header)
-        layout.addWidget(self.infoLabel)
+        buttons_layout = QHBoxLayout()
 
-        layout.addStretch(1)
-
-        layout.addLayout(measurement_layout)
-
-        layout.addStretch(1)
-
-        layout.addLayout(buttons_layout)
-
-    # ===================================
-    # BOUTON RETOUR
-    # ===================================
-    def go_back(self):
-        self.reset_page()
-
-        # Retour à la page précédente
-        self.main_window.go_to_blood_pressure()
-
-    # ===================================
-    # COMMENCER LA MESURE
-    # ===================================
-    def start_measure(self):
-        self.reset_page()
-
-        self.measure_running = True
-
-        self.statusLabel.setText("Mesure en cours...")
-
-        self.infoLabel.setText(
-            "Restez immobile devant le capteur."
+        buttons_layout.setSpacing(
+            20
         )
 
+        # Centrage horizontal
+
+        buttons_layout.addStretch()
+
+        buttons_layout.addWidget(
+            self.startButton
+        )
+
+        buttons_layout.addWidget(
+            self.stopButton
+        )
+
+        buttons_layout.addWidget(
+            self.nextButton
+        )
+
+        buttons_layout.addStretch()
+
+        # Ajouter les boutons au layout principal
+
+        layout.addLayout(
+            buttons_layout
+        )
+
+        # ==================================================
+        # PETIT ESPACE EN BAS
+        # ==================================================
+
+        layout.addSpacing(2)
+
+        self.setLayout(
+            layout
+        )
+
+    # ==========================================================
+    # DEMARRER LA MESURE
+    # ==========================================================
+
+    # Configuration matérielle Raspberry Pi 4
+    PORT_DISTANCE = "/dev/ttyAMA3"
+    PORT_TEMPERATURE = "/dev/ttyAMA0"
+    BAUD = 9600
+    SEUIL_MM = 20
+    NB_MESURES = 3
+    TIMEOUT = 60.0
+    COMMANDE = bytes.fromhex("01 03 00 10 00 01 85 CF")
+    ENTETE = bytes.fromhex("A4 03 07 07")
+
+    def close_ports(self):
+        self.timer.stop()
+        for nom in ("tof", "temp_port"):
+            port = getattr(self, nom, None)
+            if port is not None:
+                port.close()
+                setattr(self, nom, None)
+
+    def start_measure(self):
+        self.close_ports()
+        self.temperature = 0.0
+        self.measure_running = True
+        self.temperatureLabel.setText("--.- °C")
+        self.thermometer.setTemperature(35.0)
         self.startButton.setEnabled(False)
         self.stopButton.setEnabled(True)
         self.nextButton.setEnabled(False)
+        self.infoLabel.setText("Rapprochez votre front à moins de 2 cm.")
+        self.statusLabel.setText("En attente du front...")
+        self.tof = self.temp_port = None
+        self.rx_tof = bytearray()
+        self.rx_temp = bytearray()
+        self.mesures = []
+        self.proche = False
+        self.proches = 0
+        self.distance = None
+        self.debut = time.monotonic()
+        self.derniere_distance = 0.0
+        self.envoi = 0.0
+        self.attente_tof = False
+        self.debut_proximite = 0.0
+        try:
+            self.tof = serial.Serial(self.PORT_DISTANCE, self.BAUD,
+                                     timeout=0, write_timeout=0.1)
+            self.tof.reset_input_buffer()
+            self.timer.start(40)
+        except (OSError, serial.SerialException) as exc:
+            self.show_measure_error(str(exc))
 
-        # TODO :
-        # Démarrer le capteur de température Arduino.
-        # Exemple :
-        # self.serial.write(b"START_TEMP\\n")
+    @staticmethod
+    def crc16(data):
+        crc = 0xFFFF
+        for octet in data:
+            crc ^= octet
+            for _ in range(8):
+                crc = (crc >> 1) ^ 0xA001 if crc & 1 else crc >> 1
+        return crc
 
-        self.timer.start(500)
+    def lire_distance(self, maintenant):
+        self.rx_tof.extend(self.tof.read(self.tof.in_waiting))
+        while len(self.rx_tof) >= 7:
+            if self.rx_tof[:3] != b"\x01\x03\x02":
+                del self.rx_tof[0]
+                continue
+            trame = bytes(self.rx_tof[:7])
+            if self.crc16(trame[:5]) != int.from_bytes(trame[5:7], "little"):
+                del self.rx_tof[0]
+                continue
+            del self.rx_tof[:7]
+            self.attente_tof = False
+            d = int.from_bytes(trame[3:5], "big")
+            self.distance = d if 0 < d <= 2000 else None
+            self.derniere_distance = maintenant
+            self.proches = self.proches + 1 if self.distance is not None and self.distance < self.SEUIL_MM else 0
+        if self.attente_tof and maintenant - self.envoi >= 0.35:
+            self.attente_tof = False
+            self.distance = None
+            self.proches = 0
+        if not self.attente_tof and maintenant - self.envoi >= 0.20:
+            self.tof.reset_input_buffer()
+            self.rx_tof.clear()
+            self.tof.write(self.COMMANDE)
+            self.envoi = maintenant
+            self.attente_tof = True
 
-    # ===================================
-    # VERIFICATION DE LA MESURE
-    # ===================================
+    def lire_temperatures(self):
+        self.rx_temp.extend(self.temp_port.read(self.temp_port.in_waiting))
+        while True:
+            debut = self.rx_temp.find(self.ENTETE)
+            if debut < 0:
+                del self.rx_temp[:-3]
+                return
+            del self.rx_temp[:debut]
+            if len(self.rx_temp) < 12:
+                return
+            trame = bytes(self.rx_temp[:12])
+            if sum(trame[:11]) & 0xFF != trame[11]:
+                del self.rx_temp[0]
+                continue
+            del self.rx_temp[:12]
+            corps = int.from_bytes(trame[9:11], "big", signed=True) / 100.0
+            if 30 <= corps <= 45:
+                yield corps
+
+    def annuler_acquisition(self):
+        if self.temp_port is not None:
+            self.temp_port.close()
+            self.temp_port = None
+        self.rx_temp.clear()
+        self.mesures.clear()
+        self.proche = False
+
     def check_measurement(self):
         if not self.measure_running:
             return
-
-        self.elapsed_time += 1
-
-        # TODO :
-        # Lire la température depuis l'Arduino
-        # et appeler :
-        # self.receive_temperature(temperature)
-
-        # Simulation temporaire : 36.7 °C
-        # après 3 secondes
-        if self.elapsed_time == 6:
-            self.receive_temperature(36.7)
+        maintenant = time.monotonic()
+        if maintenant - self.debut >= self.TIMEOUT:
+            self.show_measure_error("Délai de mesure dépassé.")
             return
+        try:
+            self.lire_distance(maintenant)
+            valide = (self.distance is not None and
+                      maintenant - self.derniere_distance <= 0.5 and
+                      self.distance < self.SEUIL_MM)
+            if not valide:
+                self.annuler_acquisition()
+                self.statusLabel.setText("En attente du front..." if self.distance is None else
+                                         f"Distance : {self.distance / 10:.1f} cm")
+                self.infoLabel.setText("Rapprochez votre front à moins de 2 cm.")
+                return
+            if not self.proche:
+                if self.proches < 2:
+                    return
+                self.temp_port = serial.Serial(self.PORT_TEMPERATURE, self.BAUD, timeout=0)
+                self.temp_port.reset_input_buffer()
+                self.rx_temp.clear()
+                self.proche = True
+                self.debut_proximite = maintenant
+                self.infoLabel.setText("Restez immobile devant le capteur.")
+            # Laisser le module se stabiliser, puis ignorer les anciennes trames.
+            if maintenant - self.debut_proximite < 0.5:
+                self.temp_port.reset_input_buffer()
+                self.statusLabel.setText("Stabilisation...")
+                return
+            for valeur in self.lire_temperatures():
+                self.mesures.append(valeur)
+                if len(self.mesures) >= self.NB_MESURES:
+                    self.receive_temperature(max(self.mesures))
+                    return
+            self.statusLabel.setText(f"Mesure en cours : {len(self.mesures)}/{self.NB_MESURES}")
+        except (OSError, serial.SerialException) as exc:
+            self.show_measure_error(str(exc))
 
-        # Timeout après 60 secondes
-        if self.elapsed_time >= 120:
+    def hideEvent(self, event):
+        if self.measure_running:
+            self.stop_measure()
+        super().hideEvent(event)
+
+    def receive_temperature(
+        self,
+        temperature
+    ):
+
+        # --------------------------------------------------
+        # Vérification de la valeur
+        # --------------------------------------------------
+
+        if temperature < 30 or temperature > 45:
+
             self.show_measure_error()
 
-    # ===================================
-    # RECEPTION DE LA TEMPERATURE
-    # ===================================
-    def receive_temperature(self, temperature):
-
-        if not self.measure_running:
             return
 
-        # Vérification de la valeur reçue
-        if not 30 <= temperature <= 45:
-            self.show_measure_error()
-            return
+        # --------------------------------------------------
+        # Arrêt du timer
+        # --------------------------------------------------
 
-        self.timer.stop()
+        self.close_ports()
+
         self.measure_running = False
 
         self.temperature = temperature
-        self.measure_valid = True
+
+        # --------------------------------------------------
+        # Affichage
+        # --------------------------------------------------
 
         self.temperatureLabel.setText(
             f"{temperature:.1f} °C"
@@ -538,110 +720,204 @@ class TemperaturePage(QWidget):
             "Température mesurée avec succès."
         )
 
-        # Sauvegarde dans Patient
-        if hasattr(self.main_window, "patient"):
+        # --------------------------------------------------
+        # Sauvegarde patient
+        # --------------------------------------------------
+
+        if hasattr(
+            self.main_window,
+            "patient"
+        ):
+
             self.main_window.patient.temperature = (
                 temperature
             )
 
-        self.startButton.setEnabled(True)
-        self.stopButton.setEnabled(False)
-        self.nextButton.setEnabled(True)
+        # --------------------------------------------------
+        # Boutons
+        # --------------------------------------------------
 
-    # ===================================
+        self.startButton.setEnabled(
+            True
+        )
+
+        self.stopButton.setEnabled(
+            False
+        )
+
+        self.nextButton.setEnabled(
+            True
+        )
+
+    # ==========================================================
     # ARRETER LA MESURE
-    # ===================================
-    def stop_measure(self):
-        self.timer.stop()
-        self.measure_running = False
-        self.measure_valid = False
+    # ==========================================================
 
-        self.statusLabel.setText("Mesure arrêtée")
+    def stop_measure(self):
+
+        self.close_ports()
+
+        self.measure_running = False
+
+        self.statusLabel.setText(
+            "Mesure arrêtée"
+        )
 
         self.infoLabel.setText(
             "Vous pouvez recommencer la mesure."
         )
 
-        self.startButton.setEnabled(True)
-        self.stopButton.setEnabled(False)
-        self.nextButton.setEnabled(False)
-
-        # TODO :
-        # Envoyer la commande d'arrêt au capteur.
-
-    # ===================================
-    # ERREUR DE MESURE
-    # ===================================
-    def show_measure_error(self):
-        self.timer.stop()
-        self.measure_running = False
-        self.measure_valid = False
-
-        self.statusLabel.setText("Échec de la mesure")
-
-        self.infoLabel.setText(
-            "Vérifiez le capteur et réessayez."
+        self.startButton.setEnabled(
+            True
         )
 
-        self.startButton.setEnabled(True)
-        self.stopButton.setEnabled(False)
-        self.nextButton.setEnabled(False)
+        self.stopButton.setEnabled(
+            False
+        )
 
-        QMessageBox.warning(
-            self,
-            "Erreur de mesure",
-            "La température n'a pas pu être mesurée.\n"
-            "Veuillez vérifier la position du capteur "
+        self.nextButton.setEnabled(
+            False
+        )
+
+    # ==========================================================
+    # ERREUR DE MESURE
+    # ==========================================================
+
+    def show_measure_error(self, detail=""):
+
+        self.close_ports()
+
+        self.measure_running = False
+
+        self.statusLabel.setText(
+            "Échec de la mesure"
+        )
+
+        self.infoLabel.setText(
+            "Veuillez vous rapprocher du capteur "
             "et réessayer."
         )
 
-    # ===================================
-    # PAGE SUIVANTE
-    # ===================================
-    def next_page(self):
-        if self.measure_running or not self.measure_valid:
-            return
+        self.startButton.setEnabled(
+            True
+        )
 
-        self.main_window.patient.temperature = (
+        self.stopButton.setEnabled(
+            False
+        )
+
+        self.nextButton.setEnabled(
+            False
+        )
+
+        QMessageBox.warning(
+
+            self,
+
+            "Erreur de mesure",
+
+            "La température n'a pas pu être mesurée.\n\n" + detail + "\n\n" +
+
+            "Veuillez :\n"
+            "• rapprocher votre tête du capteur\n"
+            "• rester immobile\n"
+            "• vérifier le capteur\n"
+            "• réessayer"
+
+        )
+
+    # ==========================================================
+    # PAGE SUIVANTE
+    # ==========================================================
+
+    def next_page(self):
+
+        # --------------------------------------------------
+        # Sauvegarde finale
+        # --------------------------------------------------
+
+        if hasattr(
+            self.main_window,
+            "patient"
+        ):
+
+            self.main_window.patient.temperature = (
+                self.temperature
+            )
+
+        print(
+            "Température :",
             self.temperature
         )
 
-        print("Température :", self.temperature)
+        # --------------------------------------------------
+        # Aller vers AVPU
+        # --------------------------------------------------
 
         if hasattr(
             self.main_window,
             "go_to_consciousness"
         ):
+
             self.main_window.go_to_consciousness()
+
         else:
+
             print(
-                "La page de conscience AVPU "
-                "n'est pas encore disponible."
+                "Erreur : "
+                "go_to_consciousness() "
+                "n'existe pas dans MainWindow."
             )
 
-    # ===================================
-    # REINITIALISATION
-    # ===================================
+    # ==========================================================
+    # RESET DE LA PAGE
+    # ==========================================================
+
     def reset_page(self):
-        self.timer.stop()
+
+        self.close_ports()
 
         self.measure_running = False
-        self.measure_valid = False
+
         self.temperature = 0.0
+
         self.elapsed_time = 0
 
-        self.temperatureLabel.setText("--.- °C")
-        self.thermometer.setTemperature(35.0)
+        # --------------------------------------------------
+        # Réinitialiser affichage
+        # --------------------------------------------------
+
+        self.temperatureLabel.setText(
+            "--.- °C"
+        )
+
+        self.thermometer.setTemperature(
+            35.0
+        )
 
         self.statusLabel.setText(
             "Prêt pour la mesure"
         )
 
         self.infoLabel.setText(
-            "Approchez le front du capteur, "
-            "puis appuyez sur COMMENCER."
+
+            "Veuillez rapprocher votre tête du capteur.\n"
+            "Cliquez sur COMMENCER, puis approchez votre front."
+
         )
 
-        self.startButton.setEnabled(True)
-        self.stopButton.setEnabled(False)
-        self.nextButton.setEnabled(False)
+        # --------------------------------------------------
+        # Réinitialiser boutons
+        # --------------------------------------------------
+
+        self.startButton.setEnabled(
+            True
+        )
+
+        self.stopButton.setEnabled(
+            False
+        )
+
+        self.nextButton.setEnabled(
+            False
+        )
